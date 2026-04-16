@@ -113,20 +113,26 @@ export class LobbyScene extends Phaser.Scene {
       this.addChatMessage(data);
     });
 
-    // Room code: server sends it explicitly via onJoin (arrives after ROOM_STATE).
-    // This is the most reliable approach — no state-sync timing issues.
+    // roomCode message is enqueued on the server during onJoin and delivered
+    // AFTER ROOM_STATE, making it a reliable "state is ready" signal.
+    let playersSubscribed = false;
+    const initPlayers = () => {
+      if (playersSubscribed) return;
+      playersSubscribed = true;
+      this.subscribeToPlayers(this.room.state as NetworkGameState);
+    };
+
     this.room.onMessage('roomCode', (data: { code: string }) => {
       this.roomCodeText.setText(`CODE: ${data.code}`);
+      initPlayers();
     });
 
-    // Fallback: state may already be synced (e.g. low-latency local dev)
+    // Fallback: state may already be populated (very low-latency / local dev)
     const cur = this.room.state as NetworkGameState;
     if (cur?.roomCode) {
       this.roomCodeText.setText(`CODE: ${cur.roomCode}`);
+      initPlayers();
     }
-
-    // Player list — subscribe immediately; onAdd fires for each player as state arrives
-    this.subscribeToPlayers(this.room.state as NetworkGameState);
   }
 
   // ── Player list ───────────────────────────────────────────────────────────
@@ -134,9 +140,11 @@ export class LobbyScene extends Phaser.Scene {
   private subscribeToPlayers(state: NetworkGameState): void {
     this.rebuildPlayerList(state);
     state.players.onAdd((_player: NetworkPlayer, _sessionId: string) => {
+      if (!this.scene.isActive('LobbyScene')) return;
       this.rebuildPlayerList(state);
     });
     state.players.onRemove((_player: NetworkPlayer, _sessionId: string) => {
+      if (!this.scene.isActive('LobbyScene')) return;
       this.rebuildPlayerList(state);
     });
   }

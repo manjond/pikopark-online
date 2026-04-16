@@ -267,10 +267,15 @@ export class GameScene extends Phaser.Scene {
       this.interactiveObjects.delete(id);
     });
 
-    // scene.launch('UIScene') queues UIScene's create() for the next frame —
-    // delay so statusText is guaranteed to exist before we call setConnected.
-    this.time.delayedCall(50, () => {
-      this.ui()?.setConnected(state.roomCode || '----');
+    // Standalone path: roomCode message arrives after ROOM_STATE (~100-200 ms in prod).
+    room.onMessage('roomCode', (data: { code: string }) => {
+      this.time.delayedCall(50, () => this.ui()?.setConnected(data.code));
+    });
+    // Lobby→game path: state.roomCode is already populated; check at 100 ms
+    // to ensure UIScene has had at least one frame to complete its create().
+    this.time.delayedCall(100, () => {
+      const code = (room.state as NetworkGameState).roomCode;
+      if (code) this.ui()?.setConnected(code);
     });
     console.log(`[GameScene] Connected → room ${room.id} (${room.sessionId})`);
   }
