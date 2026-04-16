@@ -136,8 +136,11 @@ export class MenuScene extends Phaser.Scene {
         this.connectingText.setText(`Joining ${this.typedCode}...`);
         const roomId = await this.network.findRoomByCode('game_room', this.typedCode);
         if (!roomId) {
+          const failedCode = this.typedCode;
           this.showJoin();
-          this.errorText.setText(`"${this.typedCode}" not found`);
+          this.typedCode = failedCode;   // restore so user can see / edit what they typed
+          this.updateCodeDisplay();
+          this.errorText.setText(`"${failedCode}" not found`);
           return;
         }
         room = await this.network.joinById(roomId, { name: playerName });
