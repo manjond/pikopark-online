@@ -14,24 +14,12 @@ app.get('/health', (_req, res) => {
 
 const httpServer = createServer(app);
 
+// Colyseus handles CORS for /matchmake/* routes internally via its own
+// DEFAULT_CORS_HEADERS + getCorsHeaders. No extra middleware needed.
 const gameServer = new Server({
   transport: new WebSocketTransport({ server: httpServer }),
 });
 gameServer.define('game_room', GameRoom);
-
-// Colyseus prepends its own HTTP listener so it runs before Express.
-// We must also prepend — AFTER Colyseus — so our CORS handler is truly first.
-httpServer.prependListener('request', (req, res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  // Preflight: answer immediately so the browser proceeds with the real request.
-  if (req.method === 'OPTIONS') {
-    res.writeHead(204);
-    res.end();
-  }
-  // Non-OPTIONS: headers are set; let Colyseus / Express handle the response.
-});
 
 const port = Number(process.env['PORT'] ?? SERVER_PORT);
 
