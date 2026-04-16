@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import { Room } from 'colyseus.js';
 import { Player } from '../entities/Player';
 import { InteractiveObject } from '../entities/InteractiveObject';
-import { applyMovement } from '../physics/PlatformerPhysics';
 import {
   ColyseusClient,
   NetworkGameState,
@@ -24,7 +23,6 @@ import {
 import {
   generatePlayerSpritesheet,
   registerPlayerAnims,
-  resolveAnimKey,
 } from '../utils/PlayerTextures';
 import { playJump, playLevelComplete, startBgMusic, stopBgMusic } from '../utils/SoundSystem';
 
@@ -50,10 +48,14 @@ interface PlayerListMsg {
 export class GameScene extends Phaser.Scene {
   // ── Terrain ────────────────────────────────────────────────────────────────
   private tiles!: Phaser.Physics.Arcade.StaticGroup;
+  private doorGroup!: Phaser.Physics.Arcade.StaticGroup;
 
-  // ── Local player — Arcade Physics, always present regardless of server ──────
-  private localPlayer!: Phaser.Physics.Arcade.Sprite;
-  private localColorIndex = 0;
+  // ── All players — both local and remote, all driven by server positions ────
+  // Using one map for everything eliminates the dual-simulation desync.
+  private players = new Map<string, Player>();
+
+  // ── Interactive objects ────────────────────────────────────────────────────
+  private interactiveObjects = new Map<string, InteractiveObject>();
 
   // ── Input ──────────────────────────────────────────────────────────────────
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -69,25 +71,18 @@ export class GameScene extends Phaser.Scene {
   private localSessionId = '';
   private inputSequence = 0;
 
-  // ── Remote players rendered from server broadcasts (excludes local player) ──
-  private remotePlayers = new Map<string, Player>();
-
-  // ── Interactive objects loaded from level data + synced via server msgs ──────
-  private interactiveObjects = new Map<string, InteractiveObject>();
-  private doorGroup!: Phaser.Physics.Arcade.StaticGroup;
-
-  // ── Level-complete overlay (for dismissal on level change) ────────────────
+  // ── Level-complete overlay ─────────────────────────────────────────────────
   private levelCompleteOverlay: Phaser.GameObjects.GameObject[] = [];
 
-  // ── Touch controls ────────────────────────────────────────────────────────
+  // ── Touch controls ─────────────────────────────────────────────────────────
   private touchLeft = false;
   private touchRight = false;
   private touchJumpPending = false;
 
-  // ── Level timing ──────────────────────────────────────────────────────────
+  // ── Timing ────────────────────────────────────────────────────────────────
   private levelStartTime = 0;
 
-  // ── Pre-connected room from LobbyScene (optional) ─────────────────────────
+  // ── Pre-connected room from LobbyScene ────────────────────────────────────
   private preConnectedRoom: Room | null = null;
   private preConnectedNetwork: ColyseusClient | null = null;
 
@@ -95,7 +90,6 @@ export class GameScene extends Phaser.Scene {
     super({ key: 'GameScene' });
   }
 
-  /** Receives the room pre-created in LobbyScene, if coming from the lobby. */
   init(data: GameSceneData): void {
     this.preConnectedRoom = data.room ?? null;
     this.preConnectedNetwork = data.network ?? null;
@@ -104,21 +98,20 @@ export class GameScene extends Phaser.Scene {
   create(): void {
     this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
 
-    // Terrain
+    // ── Level geometry ─────────────────────────────────────────────────────
     this.generateTileTextures();
     this.tiles = this.physics.add.staticGroup();
     this.buildSolidRects(LEVEL_1.solidRects);
     this.tiles.refresh();
 
-    // Door physics group — filled from level objects
+    // doorGroup holds door physics bodies for visual reference;
+    // collision is server-authoritative so client-side bodies are cosmetic.
     this.doorGroup = this.physics.add.staticGroup();
 
-    // Local player — always present; server connection is additive
-    this.localPlayer = this.spawnLocalPlayer();
-    this.physics.add.collider(this.localPlayer, this.tiles);
-    this.physics.add.collider(this.localPlayer, this.doorGroup);
+    // ── Load level 1 interactive objects immediately ───────────────────────
+    this.loadLevelObjects(LEVEL_1.objects);
 
-    // Input
+    // ── Input ──────────────────────────────────────────────────────────────
     this.cursors = this.input.keyboard!.createCursorKeys();
     this.wasd = {
       up: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.W),
@@ -133,10 +126,7 @@ export class GameScene extends Phaser.Scene {
     this.levelStartTime = Date.now();
     this.createTouchControls();
 
-    // Load level 1 objects immediately — no server needed for initial spawn.
-    this.loadLevelObjects(LEVEL_1.objects);
-
-    // Use the lobby room if available; otherwise connect on our own.
+    // ── Connect ────────────────────────────────────────────────────────────
     if (this.preConnectedRoom !== null) {
       this.network = this.preConnectedNetwork ?? new ColyseusClient();
       this.room = this.preConnectedRoom;
@@ -152,8 +142,7 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    const body = this.localPlayer.body as Phaser.Physics.Arcade.Body;
-
+    // ── Read inputs ────────────────────────────────────────────────────────
     const jumpPressed =
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
@@ -161,30 +150,15 @@ export class GameScene extends Phaser.Scene {
       this.touchJumpPending;
     this.touchJumpPending = false;
 
-    if (jumpPressed && body.blocked.down) playJump();
-
-    const movingLeft = this.cursors.left.isDown || this.wasd.left.isDown || this.touchLeft;
+    const movingLeft  = this.cursors.left.isDown  || this.wasd.left.isDown  || this.touchLeft;
     const movingRight = this.cursors.right.isDown || this.wasd.right.isDown || this.touchRight;
 
-    // Local physics always runs regardless of server
-    applyMovement(body, movingLeft, movingRight, jumpPressed);
-
-    // ── Drive local player animation ──────────────────────────────────────────
-    const velX = body.velocity.x;
-    const grounded = body.blocked.down;
-    const animKey = resolveAnimKey(this.localColorIndex, velX, grounded);
-    if (this.localPlayer.anims.currentAnim?.key !== animKey) {
-      this.localPlayer.play(animKey);
-    }
-    if (velX < -1) this.localPlayer.setFlipX(true);
-    else if (velX > 1) this.localPlayer.setFlipX(false);
-
-    // Advance remote player interpolation every frame
-    this.remotePlayers.forEach((p) => p.tick(delta));
+    // ── Advance all player sprites (lerp toward server target) ────────────
+    this.players.forEach((p) => p.tick(delta));
 
     if (this.room === null) return;
 
-    // Send input to server
+    // ── Send input to server ───────────────────────────────────────────────
     const input: InputMessage = {
       left: movingLeft,
       right: movingRight,
@@ -197,7 +171,6 @@ export class GameScene extends Phaser.Scene {
 
   // ─── Network ─────────────────────────────────────────────────────────────────
 
-  /** Standalone connect path — used when entering directly without lobby. */
   private async connect(): Promise<void> {
     const room = await this.network.joinOrCreate('game_room', {
       name: `Player ${Math.floor(Math.random() * 100)}`,
@@ -207,11 +180,10 @@ export class GameScene extends Phaser.Scene {
     this.subscribeToRoom();
   }
 
-  /** Subscribe to all room messages (shared by lobby-connected and standalone paths). */
   private subscribeToRoom(): void {
     const room = this.room!;
 
-    // ── Room code for HUD ─────────────────────────────────────────────────────
+    // ── Room code for HUD ─────────────────────────────────────────────────
     room.onStateChange.once((s) => {
       const code = (s as NetworkGameState).roomCode;
       if (code) this.time.delayedCall(50, () => this.ui()?.setConnected(code));
@@ -221,48 +193,53 @@ export class GameScene extends Phaser.Scene {
       if (code) this.ui()?.setConnected(code);
     });
 
-    // ── Player list ───────────────────────────────────────────────────────────
-    // Server broadcasts playerList on every join/leave.
-    // We use this to create/destroy remote sprites and set local player color.
+    // ── Player roster ─────────────────────────────────────────────────────
+    // Server broadcasts playerList on join/leave and every 5 ticks.
+    // We create/destroy player sprites here; positions come from 'positions'.
     room.onMessage('playerList', (data: PlayerListMsg) => {
       const knownIds = new Set(data.players.map((p) => p.id));
 
-      // Remove sprites for players no longer in the list
-      this.remotePlayers.forEach((_sprite, id) => {
+      // Remove sprites for players no longer in the room
+      this.players.forEach((_, id) => {
         if (!knownIds.has(id)) {
-          this.remotePlayers.get(id)?.destroy();
-          this.remotePlayers.delete(id);
+          this.players.get(id)?.destroy();
+          this.players.delete(id);
         }
       });
 
-      // Create sprites for new remote players; update local color
+      // Create sprites for new players; update colors for existing ones
       for (const p of data.players) {
-        if (p.id === this.localSessionId) {
-          // Sync local player color if it has changed
-          if (p.color !== this.localColorIndex) {
-            this.localColorIndex = p.color;
-            generatePlayerSpritesheet(this, this.localColorIndex);
-            registerPlayerAnims(this, this.localColorIndex);
-            const sheetKey = `player_sheet_${this.localColorIndex}`;
-            this.localPlayer.setTexture(sheetKey, 'idle');
-            this.localPlayer.play(`player_idle_${this.localColorIndex}`);
-          }
+        const existing = this.players.get(p.id);
+        if (existing) {
+          existing.updateColor(p.color, this);
         } else {
-          if (!this.remotePlayers.has(p.id)) {
-            const sprite = new Player(this, GAME_WIDTH / 2, GAME_HEIGHT / 2, p.color);
-            this.remotePlayers.set(p.id, sprite);
+          // Pre-generate texture for this color so the sprite is ready
+          generatePlayerSpritesheet(this, p.color);
+          registerPlayerAnims(this, p.color);
+
+          // Spawn at a neutral position; first 'positions' message will move them
+          const spawn = LEVEL_1.spawnPoints[0] ?? { x: TILE_SIZE * 2, y: GAME_HEIGHT - TILE_SIZE * 2 };
+          const sprite = new Player(this, spawn.x, spawn.y, p.color);
+
+          // Play jump sound when the LOCAL player takes off
+          if (p.id === this.localSessionId) {
+            sprite.onJump = () => playJump();
           }
+
+          this.players.set(p.id, sprite);
         }
       }
 
       this.ui()?.updatePlayerCount(data.players.length);
     });
 
-    // ── Position updates (server sends every tick) ─────────────────────────────
+    // ── Position updates (server sends every tick at 20 Hz) ───────────────
+    // ALL players are updated here — local and remote alike.
+    // This is the single source of truth for rendered positions, which
+    // guarantees every client sees every player at the same location.
     room.onMessage('positions', (list: PositionMsg[]) => {
       for (const pos of list) {
-        if (pos.id === this.localSessionId) continue;
-        this.remotePlayers.get(pos.id)?.receiveServerPosition(
+        this.players.get(pos.id)?.receiveServerPosition(
           pos.x,
           pos.y,
           pos.vx,
@@ -271,23 +248,19 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // ── Object state updates (server sends when something changes) ─────────────
+    // ── Interactive object state changes ───────────────────────────────────
     room.onMessage('objectStates', (list: Array<{ id: string; activated: boolean }>) => {
       for (const s of list) {
-        const iObj = this.interactiveObjects.get(s.id);
-        if (iObj) {
-          // Build a minimal NetworkObject-compatible update
-            iObj.sync({ activated: s.activated });
-        }
+        this.interactiveObjects.get(s.id)?.sync({ activated: s.activated });
       }
     });
 
-    // ── Level complete ────────────────────────────────────────────────────────
+    // ── Level complete ─────────────────────────────────────────────────────
     room.onMessage('levelComplete', (data: { playerName: string }) => {
       this.showLevelComplete(data.playerName);
     });
 
-    // ── Level start (transition to next level) ────────────────────────────────
+    // ── Level transition ───────────────────────────────────────────────────
     room.onMessage('levelStart', (data: { levelId: number }) => {
       this.rebuildLevel(data.levelId);
     });
@@ -297,12 +270,7 @@ export class GameScene extends Phaser.Scene {
 
   // ─── Level management ─────────────────────────────────────────────────────────
 
-  /**
-   * Loads interactive object sprites from a level definition array.
-   * Called at startup (level 1) and after each levelStart message.
-   */
   private loadLevelObjects(objects: LevelObjectDef[]): void {
-    // Destroy any existing interactive objects
     this.interactiveObjects.forEach((o) => o.destroy());
     this.interactiveObjects.clear();
     this.doorGroup.clear(true, true);
@@ -328,15 +296,11 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  /**
-   * Rebuilds tiles, interactive objects, and resets the local player
-   * when the server transitions to a new level.
-   */
   private rebuildLevel(levelId: number): void {
     const allLevels = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
     const levelData = allLevels.find((l) => l.id === levelId) ?? LEVEL_1;
 
-    // Dismiss any level-complete overlay
+    // Clear level-complete overlay
     this.levelCompleteOverlay.forEach((obj) => obj.destroy());
     this.levelCompleteOverlay = [];
 
@@ -345,13 +309,11 @@ export class GameScene extends Phaser.Scene {
     this.buildSolidRects(levelData.solidRects);
     this.tiles.refresh();
 
-    // Rebuild interactive objects from new level data
+    // Rebuild interactive objects for new level
     this.loadLevelObjects(levelData.objects);
 
-    // Reset local player to first spawn point
-    const spawn = levelData.spawnPoints[0] ?? { x: TILE_SIZE * 2, y: GAME_HEIGHT - TILE_SIZE * 3 };
-    const body = this.localPlayer.body as Phaser.Physics.Arcade.Body;
-    body.reset(spawn.x, spawn.y);
+    // Player positions come from the server's next 'positions' broadcast —
+    // no manual reset needed; they'll interpolate to the new spawn points.
 
     this.levelStartTime = Date.now();
     console.log(`[GameScene] Rebuilt → Level ${levelId}`);
@@ -361,9 +323,6 @@ export class GameScene extends Phaser.Scene {
 
   private showLevelComplete(winnerName: string): void {
     playLevelComplete();
-    this.cursors.left.reset();
-    this.cursors.right.reset();
-    this.cursors.up.reset();
 
     const elapsedMs = Date.now() - this.levelStartTime;
     const totalSecs = Math.floor(elapsedMs / 1000);
@@ -404,26 +363,11 @@ export class GameScene extends Phaser.Scene {
       void this.room.leave();
       this.room = null;
     }
-    this.remotePlayers.forEach((s) => s.destroy());
-    this.remotePlayers.clear();
+    this.players.forEach((s) => s.destroy());
+    this.players.clear();
     this.interactiveObjects.forEach((o) => o.destroy());
     this.interactiveObjects.clear();
     this.scene.stop('UIScene');
-  }
-
-  // ─── Local player setup ───────────────────────────────────────────────────────
-
-  private spawnLocalPlayer(): Phaser.Physics.Arcade.Sprite {
-    // Start with color 0; updated on first playerList message.
-    generatePlayerSpritesheet(this, 0);
-    registerPlayerAnims(this, 0);
-
-    const spawn = LEVEL_1.spawnPoints[0] ?? { x: TILE_SIZE * 2, y: GAME_HEIGHT - TILE_SIZE * 3 };
-    const sprite = this.physics.add.sprite(spawn.x, spawn.y, 'player_sheet_0', 'idle');
-    sprite.play('player_idle_0');
-    sprite.setCollideWorldBounds(true);
-    sprite.setDepth(1);
-    return sprite;
   }
 
   // ─── Tile texture generation ──────────────────────────────────────────────────
@@ -440,7 +384,6 @@ export class GameScene extends Phaser.Scene {
       g.generateTexture('tile_ground', TILE_SIZE, TILE_SIZE);
       g.destroy();
     }
-
     if (!this.textures.exists('tile_platform')) {
       const g = this.add.graphics();
       g.fillStyle(0x8888aa);
@@ -452,7 +395,6 @@ export class GameScene extends Phaser.Scene {
       g.generateTexture('tile_platform', TILE_SIZE, TILE_SIZE);
       g.destroy();
     }
-
     if (!this.textures.exists('door_body')) {
       const g = this.add.graphics();
       g.fillStyle(0xffffff, 1);
@@ -494,7 +436,7 @@ export class GameScene extends Phaser.Scene {
     );
     makeBtn(GAME_WIDTH - 22, H - 20, 'A',
       () => { this.touchJumpPending = true; },
-      () => { /* one-shot — reset in update */ },
+      () => { /* one-shot */ },
     );
   }
 
