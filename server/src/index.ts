@@ -20,6 +20,12 @@ const httpServer = createServer(app);
 const gameServer = new Server({
   transport: new WebSocketTransport({ server: httpServer }),
 });
+
+// Colyseus maintains its own internal express app for matchmaking routes.
+// Our app.use(cors()) only covers Express routes — we must also patch Colyseus's app.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+(gameServer as any).express?.use(cors());
+
 gameServer.define('game_room', GameRoom);
 
 const port = Number(process.env['PORT'] ?? SERVER_PORT);
