@@ -9,6 +9,7 @@ const SERVER_URL =
 
 /** Minimal interface for iterating/subscribing to a Colyseus MapSchema. */
 interface NetworkMap<T> {
+  readonly size: number;
   get(key: string): T | undefined;
   onAdd(callback: (value: T, key: string) => void): void;
   onRemove(callback: (value: T, key: string) => void): void;

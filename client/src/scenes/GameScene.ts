@@ -267,13 +267,17 @@ export class GameScene extends Phaser.Scene {
       this.interactiveObjects.delete(id);
     });
 
-    // Standalone path: roomCode message arrives after ROOM_STATE (~100-200 ms in prod).
-    room.onMessage('roomCode', (data: { code: string }) => {
-      this.time.delayedCall(50, () => this.ui()?.setConnected(data.code));
+    // onStateChange fires on every server tick (20 Hz) — state.roomCode is
+    // always populated (set once in onCreate, never changes), so the first
+    // fired event reliably gives us the code on both the lobby→game path and
+    // the standalone connect path.  50 ms sub-delay lets UIScene initialise.
+    room.onStateChange.once((s) => {
+      const code = (s as NetworkGameState).roomCode;
+      if (code) this.time.delayedCall(50, () => this.ui()?.setConnected(code));
     });
-    // Lobby→game path: state.roomCode is already populated; check at 100 ms
-    // to ensure UIScene has had at least one frame to complete its create().
-    this.time.delayedCall(100, () => {
+    // Belt-and-suspenders: read state directly at 250 ms in case the first
+    // onStateChange fired before the sub-delay resolved.
+    this.time.delayedCall(250, () => {
       const code = (room.state as NetworkGameState).roomCode;
       if (code) this.ui()?.setConnected(code);
     });

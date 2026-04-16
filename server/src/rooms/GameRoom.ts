@@ -52,6 +52,12 @@ export class GameRoom extends Room<GameState> {
       // TODO: track per-player ready state; start when all are ready
     });
 
+    // Any player can start the game; server broadcasts so every lobby
+    // client transitions to GameScene at the same time.
+    this.onMessage('startGame', (_client) => {
+      this.broadcast('gameStart', {});
+    });
+
     this.onMessage<{ text: string }>('chat', (client, data) => {
       const player = this.state.players.get(client.sessionId);
       const name = player?.name ?? 'Unknown';

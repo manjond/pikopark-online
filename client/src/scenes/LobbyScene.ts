@@ -77,7 +77,9 @@ export class LobbyScene extends Phaser.Scene {
     this.playerListContainer = this.add.container(8, 80);
 
     this.makeButton(lx, H - 36, 'START GAME', '#00ff00', () => {
-      this.scene.start('GameScene', { room: this.room, network: this.network });
+      // Tell the server to start — it broadcasts 'gameStart' to every player
+      // in this room so all lobbies transition to GameScene simultaneously.
+      this.room.send('startGame', {});
     });
     this.makeButton(lx, H - 18, 'LEAVE', '#666666', () => {
       void this.room.leave();
@@ -108,46 +110,42 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     // ── Room state ─────────────────────────────────────────────────────────────
-    // Listen for incoming chat messages
     this.room.onMessage('chat', (data: { name: string; text: string }) => {
       this.addChatMessage(data);
     });
 
-    // roomCode message is enqueued on the server during onJoin and delivered
-    // AFTER ROOM_STATE, making it a reliable "state is ready" signal.
-    let playersSubscribed = false;
-    const initPlayers = () => {
-      if (playersSubscribed) return;
-      playersSubscribed = true;
-      this.subscribeToPlayers(this.room.state as NetworkGameState);
-    };
-
+    // Room code: server sends this explicitly after ROOM_STATE.
     this.room.onMessage('roomCode', (data: { code: string }) => {
       this.roomCodeText.setText(`CODE: ${data.code}`);
-      initPlayers();
     });
 
-    // Fallback: state may already be populated (very low-latency / local dev)
+    // Player list + room code via onStateChange — fires on every server tick
+    // (~20 Hz) AFTER state is fully decoded.  This is the most reliable way to
+    // keep the lobby list up to date regardless of join/leave timing.
+    this.room.onStateChange((s) => {
+      if (!this.scene.isActive('LobbyScene')) return;
+      const state = s as NetworkGameState;
+      if (state.roomCode) {
+        this.roomCodeText.setText(`CODE: ${state.roomCode}`);
+      }
+      this.rebuildPlayerList(state);
+    });
+
+    // Seed immediately if the state is already populated (fast / local dev).
     const cur = this.room.state as NetworkGameState;
     if (cur?.roomCode) {
       this.roomCodeText.setText(`CODE: ${cur.roomCode}`);
-      initPlayers();
+      this.rebuildPlayerList(cur);
     }
+
+    // Server broadcasts 'gameStart' when any player sends 'startGame'.
+    // All clients in the lobby receive this and transition together.
+    this.room.onMessage('gameStart', () => {
+      this.scene.start('GameScene', { room: this.room, network: this.network });
+    });
   }
 
   // ── Player list ───────────────────────────────────────────────────────────
-
-  private subscribeToPlayers(state: NetworkGameState): void {
-    this.rebuildPlayerList(state);
-    state.players.onAdd((_player: NetworkPlayer, _sessionId: string) => {
-      if (!this.scene.isActive('LobbyScene')) return;
-      this.rebuildPlayerList(state);
-    });
-    state.players.onRemove((_player: NetworkPlayer, _sessionId: string) => {
-      if (!this.scene.isActive('LobbyScene')) return;
-      this.rebuildPlayerList(state);
-    });
-  }
 
   private rebuildPlayerList(state: NetworkGameState): void {
     this.playerListContainer.removeAll(true);
