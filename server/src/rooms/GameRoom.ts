@@ -43,6 +43,9 @@ export class GameRoom extends Room<GameState> {
   /** Previous objectStates activation snapshot — used to detect changes. */
   private prevObjStates = new Map<string, boolean>();
 
+  /** Tick counter — used for periodic lower-frequency broadcasts. */
+  private tickCount = 0;
+
   onCreate(_options: Record<string, unknown>): void {
     this.setState(new GameState());
     this.state.roomCode = this.generateRoomCode();
@@ -195,8 +198,16 @@ export class GameRoom extends Room<GameState> {
 
   private tick(deltaTime: number): void {
     const dt = deltaTime / 1000;
+    this.tickCount++;
 
-    // ── 0. Snapshot Y positions before integration (for one-way checks) ────────
+    // ── 0. Broadcast player list every 5 ticks (250 ms) ────────────────────────
+    // This ensures late-subscribing clients (LobbyScene registers listener after
+    // the first onJoin broadcast fires) always receive an up-to-date roster.
+    if (this.tickCount % 5 === 0) {
+      this.broadcastPlayerList();
+    }
+
+    // ── 1. Snapshot Y positions before integration (for one-way checks) ────────
     const prevY = new Map<string, number>();
     this.state.players.forEach((p, id) => prevY.set(id, p.y));
 
