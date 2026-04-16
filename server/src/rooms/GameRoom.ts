@@ -83,6 +83,11 @@ export class GameRoom extends Room<GameState> {
 
     this.state.players.set(client.sessionId, player);
     this.broadcast('playerJoined', { name: player.name, color: player.color });
+
+    // Send room code directly to this client.
+    // Messages sent during onJoin are enqueued and delivered AFTER ROOM_STATE,
+    // so the client's state is fully populated when this message arrives.
+    client.send('roomCode', { code: this.state.roomCode });
   }
 
   onLeave(client: Client, _consented: boolean): void {

@@ -113,18 +113,20 @@ export class LobbyScene extends Phaser.Scene {
       this.addChatMessage(data);
     });
 
-    // Apply state immediately if already synced, or wait for first state change
-    const applyState = (s: NetworkGameState) => {
-      if (!s.roomCode) return;
-      this.roomCodeText.setText(`CODE: ${s.roomCode}`);
-      this.subscribeToPlayers(s);
-    };
+    // Room code: server sends it explicitly via onJoin (arrives after ROOM_STATE).
+    // This is the most reliable approach — no state-sync timing issues.
+    this.room.onMessage('roomCode', (data: { code: string }) => {
+      this.roomCodeText.setText(`CODE: ${data.code}`);
+    });
+
+    // Fallback: state may already be synced (e.g. low-latency local dev)
     const cur = this.room.state as NetworkGameState;
     if (cur?.roomCode) {
-      applyState(cur);
-    } else {
-      this.room.onStateChange.once((s) => applyState(s as NetworkGameState));
+      this.roomCodeText.setText(`CODE: ${cur.roomCode}`);
     }
+
+    // Player list — subscribe immediately; onAdd fires for each player as state arrives
+    this.subscribeToPlayers(this.room.state as NetworkGameState);
   }
 
   // ── Player list ───────────────────────────────────────────────────────────
