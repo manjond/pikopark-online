@@ -12,6 +12,9 @@ export class InteractiveObject {
   private readonly rect: Phaser.GameObjects.Rectangle;
   readonly type: string;
 
+  /** "GOAL" label rendered above the goal rectangle. */
+  private goalLabel: Phaser.GameObjects.Text | null = null;
+
   /** Physics image used for local player collision (doors only). */
   private doorImg: Phaser.Physics.Arcade.Image | null = null;
 
@@ -28,14 +31,20 @@ export class InteractiveObject {
       this.rect.setDepth(2);
 
     } else if (data.type === 'goal') {
-      // Gold pulsing star — marks the level exit
-      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, GOAL_COLOR);
+      // Gold pulsing star — rendered larger than its collision box for visibility
+      this.rect = scene.add.rectangle(data.x, data.y, 24, 24, GOAL_COLOR);
       this.rect.setDepth(2);
-      // Pulse alpha so it stands out
+      // "GOAL" label floats above the rectangle
+      this.goalLabel = scene.add.text(data.x, data.y - 17, 'GOAL', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '5px',
+        color: '#ffd700',
+      }).setOrigin(0.5, 0.5).setDepth(3);
+      // Pulse both rect and label together
       scene.tweens.add({
-        targets: this.rect,
-        alpha: { from: 0.5, to: 1 },
-        duration: 500,
+        targets: [this.rect, this.goalLabel],
+        alpha: { from: 0.55, to: 1 },
+        duration: 550,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
@@ -77,7 +86,9 @@ export class InteractiveObject {
 
   destroy(): void {
     this.scene.tweens.killTweensOf(this.rect);
+    if (this.goalLabel) this.scene.tweens.killTweensOf(this.goalLabel);
     this.rect.destroy();
+    this.goalLabel?.destroy();
     this.doorImg?.destroy();
   }
 }

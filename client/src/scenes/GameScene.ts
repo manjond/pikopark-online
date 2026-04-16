@@ -17,6 +17,9 @@ import {
   InputMessage,
   LEVEL_1,
   LEVEL_2,
+  LEVEL_3,
+  LEVEL_4,
+  LEVEL_5,
   SolidRect,
 } from '@pikopark/shared';
 import {
@@ -297,7 +300,8 @@ export class GameScene extends Phaser.Scene {
    * when the server transitions to a new level.
    */
   private rebuildLevel(levelId: number): void {
-    const levelData = levelId === 2 ? LEVEL_2 : LEVEL_1;
+    const allLevels = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
+    const levelData = allLevels.find((l) => l.id === levelId) ?? LEVEL_1;
 
     // Dismiss any level-complete overlay
     this.levelCompleteOverlay.forEach((obj) => obj.destroy());

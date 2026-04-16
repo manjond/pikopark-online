@@ -15,6 +15,8 @@ interface ChatMessage {
 
 const FONT = { fontFamily: '"Press Start 2P"' };
 const MAX_CHAT = 8;
+const CHAT_W = 160;   // right-panel chat width (1/3 of 480)
+const LOBBY_W = 320;  // left-panel lobby width (2/3 of 480)
 
 export class LobbyScene extends Phaser.Scene {
   private room!: Room;
@@ -41,18 +43,18 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   create(): void {
-    const W = this.cameras.main.width;   // 480
     const H = this.cameras.main.height;  // 270
 
+    // lx = centre of left lobby panel (2/3 of screen)
+    // rx = centre of right chat panel (1/3 of screen)
+    const lx = LOBBY_W / 2;           // 160
+    const rx = LOBBY_W + CHAT_W / 2;  // 400
+
     // ── Background panels ─────────────────────────────────────────────────────
-    // Left half
-    this.add.rectangle(W / 4, H / 2, W / 2 - 2, H, 0x111122, 0.6);
-    // Right half
-    this.add.rectangle(W * 3 / 4, H / 2, W / 2 - 2, H, 0x0d1117, 0.7);
+    this.add.rectangle(lx, H / 2, LOBBY_W - 2, H, 0x111122, 0.6);
+    this.add.rectangle(rx, H / 2, CHAT_W - 2, H, 0x0d1117, 0.7);
 
     // ── Left panel: room info + player list ───────────────────────────────────
-    const lx = W / 4;  // centre of left panel = 120
-
     this.add.text(lx, 14, 'LOBBY', {
       ...FONT, fontSize: '12px', color: '#ffffff',
     }).setOrigin(0.5);
@@ -69,9 +71,10 @@ export class LobbyScene extends Phaser.Scene {
       ...FONT, fontSize: '6px', color: '#888888',
     }).setOrigin(0.5);
 
-    this.add.rectangle(lx, 70, 220, 1, 0x333355);
+    this.add.rectangle(lx, 70, LOBBY_W - 20, 1, 0x333355);
 
-    this.playerListContainer = this.add.container(lx, 80);
+    // Container anchored to absolute left — dot + name are relative to (0,0)
+    this.playerListContainer = this.add.container(8, 80);
 
     this.makeButton(lx, H - 36, 'START GAME', '#00ff00', () => {
       this.scene.start('GameScene', { room: this.room, network: this.network });
@@ -82,22 +85,20 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     // ── Right panel: chat ─────────────────────────────────────────────────────
-    const rx = W * 3 / 4;  // centre of right panel = 360
-
     this.add.text(rx, 14, 'CHAT', {
-      ...FONT, fontSize: '8px', color: '#aaaaaa',
+      ...FONT, fontSize: '7px', color: '#aaaaaa',
     }).setOrigin(0.5);
 
-    this.add.rectangle(rx, 22, W / 2 - 8, 1, 0x333355);
+    this.add.rectangle(rx, 22, CHAT_W - 8, 1, 0x333355);
 
     // Chat messages container (scrolls newest at bottom)
-    this.chatLinesContainer = this.add.container(W / 2 + 4, 28);
+    this.chatLinesContainer = this.add.container(LOBBY_W + 4, 28);
 
     // Input divider + input box
-    this.add.rectangle(rx, H - 28, W / 2 - 8, 1, 0x333355);
-    this.chatInputText = this.add.text(W / 2 + 4, H - 22, '> _', {
+    this.add.rectangle(rx, H - 28, CHAT_W - 8, 1, 0x333355);
+    this.chatInputText = this.add.text(LOBBY_W + 4, H - 22, '> _', {
       ...FONT, fontSize: '6px', color: '#00ccff',
-      wordWrap: { width: W / 2 - 12 },
+      wordWrap: { width: CHAT_W - 16 },
     });
 
     // ── Keyboard input ─────────────────────────────────────────────────────────
@@ -112,17 +113,18 @@ export class LobbyScene extends Phaser.Scene {
       this.addChatMessage(data);
     });
 
-    // Poll for initial state (roomCode + player list)
-    const tryApplyState = () => {
-      const state = this.room.state as NetworkGameState;
-      if (!state?.roomCode) {
-        this.time.delayedCall(100, tryApplyState);
-        return;
-      }
-      this.roomCodeText.setText(`CODE: ${state.roomCode}`);
-      this.subscribeToPlayers(state);
+    // Apply state immediately if already synced, or wait for first state change
+    const applyState = (s: NetworkGameState) => {
+      if (!s.roomCode) return;
+      this.roomCodeText.setText(`CODE: ${s.roomCode}`);
+      this.subscribeToPlayers(s);
     };
-    this.time.delayedCall(0, tryApplyState);
+    const cur = this.room.state as NetworkGameState;
+    if (cur?.roomCode) {
+      applyState(cur);
+    } else {
+      this.room.onStateChange.once((s) => applyState(s as NetworkGameState));
+    }
   }
 
   // ── Player list ───────────────────────────────────────────────────────────
@@ -144,10 +146,10 @@ export class LobbyScene extends Phaser.Scene {
     state.players.forEach((player: NetworkPlayer) => {
       const rowY = index * 16;
       const dotColor = PLAYER_COLORS[player.color] ?? 0xffffff;
-      const dot = this.add.rectangle(-90, rowY, 7, 7, dotColor);
+      const dot = this.add.rectangle(4, rowY, 7, 7, dotColor);
       const isMe = player.id === this.room.sessionId;
       const label = isMe ? `${player.name} (you)` : player.name;
-      const nameText = this.add.text(-78, rowY, label, {
+      const nameText = this.add.text(14, rowY, label, {
         ...FONT, fontSize: '7px',
         color: isMe ? '#ffffff' : '#aaaaaa',
       }).setOrigin(0, 0.5);
@@ -171,11 +173,11 @@ export class LobbyScene extends Phaser.Scene {
   private rebuildChatLines(): void {
     this.chatLinesContainer.removeAll(true);
 
-    const lineHeight = 17;
+    const lineHeight = 16;
     this.chatMessages.forEach((msg, i) => {
       const text = this.add.text(0, i * lineHeight, `${msg.name}: ${msg.text}`, {
         ...FONT, fontSize: '6px', color: '#cccccc',
-        wordWrap: { width: this.cameras.main.width / 2 - 12 },
+        wordWrap: { width: CHAT_W - 16 },
       });
       this.chatLinesContainer.add(text);
     });
