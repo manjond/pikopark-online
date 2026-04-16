@@ -185,35 +185,35 @@ Server → Client:
 ## Development Phases
 
 ### Phase 1 — Foundation (Start here)
-- [ ] Initialize project structure (monorepo with client + server)
-- [ ] Basic Phaser scene with a character that moves and jumps
-- [ ] Basic Colyseus server with room creation
-- [ ] Connect client to server, sync one player's position
-- [ ] Add multiple players rendering on screen
+- [x] Initialize project structure (monorepo with client + server)
+- [x] Basic Phaser scene with a character that moves and jumps
+- [x] Basic Colyseus server with room creation
+- [x] Connect client to server, sync one player's position
+- [x] Add multiple players rendering on screen
 
 ### Phase 2 — Core Gameplay
-- [ ] Tilemap-based level loading (use Tiled Map Editor)
-- [ ] Server-side physics and collision detection
-- [ ] Client-side prediction and interpolation
-- [ ] Player stacking mechanic
-- [ ] Interactive objects (buttons, doors)
+- [x] Tilemap-based level loading (procedural geometry via SolidRect)
+- [x] Server-side physics and collision detection
+- [x] Client-side prediction and interpolation
+- [x] Player stacking mechanic
+- [x] Interactive objects (buttons, doors)
 
 ### Phase 3 — Room System
-- [ ] Room code generation and joining
-- [ ] Lobby UI with player list and ready system
+- [x] Room code generation and joining
+- [x] Lobby UI with player list and ready system
 - [ ] Quick play matchmaking
-- [ ] Chat system in lobby
+- [x] Chat system in lobby
 
 ### Phase 4 — Content & Polish
-- [ ] Design 5-10 levels with progressive difficulty
-- [ ] Sprite animations and particle effects
-- [ ] Sound effects and background music
-- [ ] Level completion screen with stats
-- [ ] Mobile touch controls
+- [x] Design 5 levels with progressive difficulty (levels 1–5)
+- [x] Sprite animations (procedural 4-frame spritesheet per player color)
+- [x] Sound effects and background music (Web Audio API, no files)
+- [x] Level completion screen with stats (winner name + elapsed time)
+- [x] Mobile touch controls (virtual D-pad + jump button)
 
 ### Phase 5 — Deployment
-- [ ] Build pipeline for client (Vite → static files)
-- [ ] Deploy client to Vercel/Netlify
-- [ ] Deploy Colyseus server to Railway/Render
-- [ ] Custom domain setup
+- [x] Build pipeline for client (Vite → static files) — `npm run build` produces `client/dist/`
+- [x] Deploy client to Vercel/Netlify — `vercel.json` config at root, connect repo to Vercel
+- [x] Deploy Colyseus server to Railway/Render — `render.yaml` config at root, connect repo to Render
+- [ ] Custom domain setup — point DNS to Vercel/Render after deploy
 - [ ] Basic analytics

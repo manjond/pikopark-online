@@ -24,7 +24,7 @@ import {
   registerPlayerAnims,
   resolveAnimKey,
 } from '../utils/PlayerTextures';
-import { playJump, playLevelComplete } from '../utils/SoundSystem';
+import { playJump, playLevelComplete, startBgMusic, stopBgMusic } from '../utils/SoundSystem';
 
 interface GameSceneData {
   room?: Room;
@@ -62,6 +62,14 @@ export class GameScene extends Phaser.Scene {
 
   // ── Level-complete overlay (for dismissal on level change) ────────────────
   private levelCompleteOverlay: Phaser.GameObjects.GameObject[] = [];
+
+  // ── Touch controls ────────────────────────────────────────────────────────
+  private touchLeft = false;
+  private touchRight = false;
+  private touchJumpPending = false;
+
+  // ── Level timing ──────────────────────────────────────────────────────────
+  private levelStartTime = 0;
 
   // ── Pre-connected room from LobbyScene (optional) ─────────────────────────
   private preConnectedRoom: Room | null = null;
@@ -105,6 +113,10 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch('UIScene');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
 
+    startBgMusic();
+    this.levelStartTime = Date.now();
+    this.createTouchControls();
+
     // Use the lobby room if available; otherwise connect on our own.
     if (this.preConnectedRoom !== null) {
       this.network = this.preConnectedNetwork ?? new ColyseusClient();
@@ -127,12 +139,14 @@ export class GameScene extends Phaser.Scene {
     const jumpPressed =
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
-      Phaser.Input.Keyboard.JustDown(this.wasd.up);
+      Phaser.Input.Keyboard.JustDown(this.wasd.up) ||
+      this.touchJumpPending;
+    this.touchJumpPending = false;
 
     if (jumpPressed && body.blocked.down) playJump();
 
-    const movingLeft = this.cursors.left.isDown || this.wasd.left.isDown;
-    const movingRight = this.cursors.right.isDown || this.wasd.right.isDown;
+    const movingLeft = this.cursors.left.isDown || this.wasd.left.isDown || this.touchLeft;
+    const movingRight = this.cursors.right.isDown || this.wasd.right.isDown || this.touchRight;
 
     // Local physics always runs regardless of server
     applyMovement(body, movingLeft, movingRight, jumpPressed);
@@ -302,6 +316,7 @@ export class GameScene extends Phaser.Scene {
     const body = this.localPlayer.body as Phaser.Physics.Arcade.Body;
     body.reset(spawn.x, spawn.y);
 
+    this.levelStartTime = Date.now();
     console.log(`[GameScene] Rebuilt → Level ${levelId}`);
   }
 
@@ -313,22 +328,31 @@ export class GameScene extends Phaser.Scene {
     this.cursors.right.reset();
     this.cursors.up.reset();
 
+    const elapsedMs = Date.now() - this.levelStartTime;
+    const totalSecs = Math.floor(elapsedMs / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
+
     const cx = GAME_WIDTH / 2;
     const cy = GAME_HEIGHT / 2;
     const FONT = { fontFamily: '"Press Start 2P"' };
 
     const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.75).setDepth(20);
-    const t1 = this.add.text(cx, cy - 30, 'LEVEL COMPLETE!', {
+    const t1 = this.add.text(cx, cy - 34, 'LEVEL COMPLETE!', {
       ...FONT, fontSize: '10px', color: '#ffd700',
     }).setOrigin(0.5).setDepth(21);
-    const t2 = this.add.text(cx, cy - 10, `${winnerName} reached the goal`, {
+    const t2 = this.add.text(cx, cy - 12, `${winnerName} reached the goal`, {
       ...FONT, fontSize: '6px', color: '#ffffff',
     }).setOrigin(0.5).setDepth(21);
-    const t3 = this.add.text(cx, cy + 14, 'Next level loading...', {
+    const t3 = this.add.text(cx, cy + 4, `Time: ${timeStr}`, {
+      ...FONT, fontSize: '6px', color: '#00ff88',
+    }).setOrigin(0.5).setDepth(21);
+    const t4 = this.add.text(cx, cy + 20, 'Next level loading...', {
       ...FONT, fontSize: '6px', color: '#888888',
     }).setOrigin(0.5).setDepth(21);
 
-    this.levelCompleteOverlay = [bg, t1, t2, t3];
+    this.levelCompleteOverlay = [bg, t1, t2, t3, t4];
   }
 
   private ui(): UIScene | null {
@@ -338,6 +362,7 @@ export class GameScene extends Phaser.Scene {
   // ─── Cleanup ──────────────────────────────────────────────────────────────────
 
   private cleanup(): void {
+    stopBgMusic();
     if (this.room !== null) {
       void this.room.leave();
       this.room = null;
@@ -398,6 +423,42 @@ export class GameScene extends Phaser.Scene {
       g.generateTexture('door_body', 1, 1);
       g.destroy();
     }
+  }
+
+  // ─── Touch controls ───────────────────────────────────────────────────────────
+
+  private createTouchControls(): void {
+    const H = GAME_HEIGHT;
+    const BTN = 32;
+    const alpha = 0.35;
+    const FONT = { fontFamily: '"Press Start 2P"', fontSize: '10px', color: '#ffffff' };
+
+    const makeBtn = (
+      x: number, y: number, label: string,
+      onDown: () => void, onUp: () => void,
+    ): void => {
+      const bg = this.add
+        .rectangle(x, y, BTN, BTN, 0xffffff, alpha)
+        .setScrollFactor(0).setDepth(30).setInteractive();
+      this.add.text(x, y, label, FONT)
+        .setOrigin(0.5).setScrollFactor(0).setDepth(31);
+      bg.on('pointerdown', onDown);
+      bg.on('pointerup', onUp);
+      bg.on('pointerout', onUp);
+    };
+
+    makeBtn(22, H - 20, '<',
+      () => { this.touchLeft = true; },
+      () => { this.touchLeft = false; },
+    );
+    makeBtn(58, H - 20, '>',
+      () => { this.touchRight = true; },
+      () => { this.touchRight = false; },
+    );
+    makeBtn(GAME_WIDTH - 22, H - 20, 'A',
+      () => { this.touchJumpPending = true; },
+      () => { /* one-shot — reset in update */ },
+    );
   }
 
   // ─── Level geometry ───────────────────────────────────────────────────────────

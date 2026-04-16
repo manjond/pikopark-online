@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: pikopark-server
+    runtime: node
+    buildCommand: npm install && npm run build --workspace=shared && npm run build --workspace=server
+    startCommand: node server/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        generateValue: false
+        value: 10000
