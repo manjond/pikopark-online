@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { Room } from 'colyseus.js';
-import { ColyseusClient, NetworkGameState, NetworkPlayer } from '../network/ColyseusClient';
+import { ColyseusClient } from '../network/ColyseusClient';
 import { PLAYER_COLORS } from '@pikopark/shared';
 
 interface LobbyData {
@@ -13,10 +13,17 @@ interface ChatMessage {
   text: string;
 }
 
+interface LobbyPlayer {
+  id: string;
+  name: string;
+  color: number;
+}
+
 const FONT = { fontFamily: '"Press Start 2P"' };
 const MAX_CHAT = 8;
-const CHAT_W = 160;   // right-panel chat width (1/3 of 480)
-const LOBBY_W = 320;  // left-panel lobby width (2/3 of 480)
+// Full-width layout: left 2/3 = players, right 1/3 = chat
+const CHAT_W = 160;
+const LOBBY_W = 320;
 
 export class LobbyScene extends Phaser.Scene {
   private room!: Room;
@@ -26,6 +33,11 @@ export class LobbyScene extends Phaser.Scene {
   private roomCodeText!: Phaser.GameObjects.Text;
   private playerListContainer!: Phaser.GameObjects.Container;
   private playerCountText!: Phaser.GameObjects.Text;
+  private startButton!: Phaser.GameObjects.Text;
+
+  // ── Player roster from server ─────────────────────────────────────────────
+  private lobbyPlayers: LobbyPlayer[] = [];
+  private isHost = false;
 
   // ── Right panel — chat ────────────────────────────────────────────────────
   private chatMessages: ChatMessage[] = [];
@@ -45,58 +57,67 @@ export class LobbyScene extends Phaser.Scene {
   create(): void {
     const H = this.cameras.main.height;  // 270
 
-    // lx = centre of left lobby panel (2/3 of screen)
-    // rx = centre of right chat panel (1/3 of screen)
-    const lx = LOBBY_W / 2;           // 160
-    const rx = LOBBY_W + CHAT_W / 2;  // 400
+    const lx = LOBBY_W / 2;           // 160  (center of left lobby panel)
+    const rx = LOBBY_W + CHAT_W / 2;  // 400  (center of right chat panel)
 
     // ── Background panels ─────────────────────────────────────────────────────
     this.add.rectangle(lx, H / 2, LOBBY_W - 2, H, 0x111122, 0.6);
     this.add.rectangle(rx, H / 2, CHAT_W - 2, H, 0x0d1117, 0.7);
 
-    // ── Left panel: room info + player list ───────────────────────────────────
-    this.add.text(lx, 14, 'LOBBY', {
+    // ── Left panel: room info ─────────────────────────────────────────────────
+    this.add.text(lx, 12, 'LOBBY', {
       ...FONT, fontSize: '12px', color: '#ffffff',
     }).setOrigin(0.5);
 
-    this.roomCodeText = this.add.text(lx, 34, 'CODE: ....', {
+    this.roomCodeText = this.add.text(lx, 30, 'CODE: ....', {
       ...FONT, fontSize: '8px', color: '#00ff88',
     }).setOrigin(0.5);
 
-    this.add.text(lx, 48, 'share with friends', {
+    this.add.text(lx, 42, 'share with friends', {
       ...FONT, fontSize: '5px', color: '#444466',
     }).setOrigin(0.5);
 
-    this.playerCountText = this.add.text(lx, 60, '', {
+    this.playerCountText = this.add.text(lx, 54, '0 / 8 players', {
       ...FONT, fontSize: '6px', color: '#888888',
     }).setOrigin(0.5);
 
-    this.add.rectangle(lx, 70, LOBBY_W - 20, 1, 0x333355);
+    this.add.rectangle(lx, 63, LOBBY_W - 20, 1, 0x333355);
 
-    // Container anchored to absolute left — dot + name are relative to (0,0)
-    this.playerListContainer = this.add.container(8, 80);
+    // ── Player list (upper 60% of left panel) ─────────────────────────────────
+    // Container anchored so each row is relative to (8, 68)
+    this.playerListContainer = this.add.container(8, 68);
 
-    this.makeButton(lx, H - 36, 'START GAME', '#00ff00', () => {
-      // Tell the server to start — it broadcasts 'gameStart' to every player
-      // in this room so all lobbies transition to GameScene simultaneously.
+    // ── Divider above buttons ─────────────────────────────────────────────────
+    this.add.rectangle(lx, H - 52, LOBBY_W - 20, 1, 0x333355);
+
+    // ── START GAME — visible only to host ─────────────────────────────────────
+    this.startButton = this.add.text(lx, H - 38, 'START GAME', {
+      ...FONT, fontSize: '8px', color: '#00ff00',
+    })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true })
+      .setVisible(false);   // hidden until host status confirmed
+
+    this.startButton.on('pointerover', () => this.startButton.setColor('#ffffff'));
+    this.startButton.on('pointerout', () => this.startButton.setColor('#00ff00'));
+    this.startButton.on('pointerdown', () => {
       this.room.send('startGame', {});
     });
+
     this.makeButton(lx, H - 18, 'LEAVE', '#666666', () => {
       void this.room.leave();
       this.scene.start('MenuScene');
     });
 
     // ── Right panel: chat ─────────────────────────────────────────────────────
-    this.add.text(rx, 14, 'CHAT', {
+    this.add.text(rx, 12, 'CHAT', {
       ...FONT, fontSize: '7px', color: '#aaaaaa',
     }).setOrigin(0.5);
 
-    this.add.rectangle(rx, 22, CHAT_W - 8, 1, 0x333355);
+    this.add.rectangle(rx, 20, CHAT_W - 8, 1, 0x333355);
 
-    // Chat messages container (scrolls newest at bottom)
-    this.chatLinesContainer = this.add.container(LOBBY_W + 4, 28);
+    this.chatLinesContainer = this.add.container(LOBBY_W + 4, 26);
 
-    // Input divider + input box
     this.add.rectangle(rx, H - 28, CHAT_W - 8, 1, 0x333355);
     this.chatInputText = this.add.text(LOBBY_W + 4, H - 22, '> _', {
       ...FONT, fontSize: '6px', color: '#00ccff',
@@ -109,63 +130,60 @@ export class LobbyScene extends Phaser.Scene {
       this.input.keyboard!.off('keydown', this.handleKeydown, this);
     });
 
-    // ── Room state ─────────────────────────────────────────────────────────────
+    // ── Room messages ──────────────────────────────────────────────────────────
     this.room.onMessage('chat', (data: { name: string; text: string }) => {
       this.addChatMessage(data);
     });
 
-    // Room code: server sends this explicitly after ROOM_STATE.
+    // Room code sent explicitly by server after ROOM_STATE is ready.
     this.room.onMessage('roomCode', (data: { code: string }) => {
       this.roomCodeText.setText(`CODE: ${data.code}`);
     });
 
-    // Player list + room code via onStateChange — fires on every server tick
-    // (~20 Hz) AFTER state is fully decoded.  This is the most reliable way to
-    // keep the lobby list up to date regardless of join/leave timing.
-    this.room.onStateChange((s) => {
+    // playerList replaces the broken state.players.forEach approach.
+    // Server broadcasts this on every join/leave and after gameStart.
+    this.room.onMessage('playerList', (data: { players: LobbyPlayer[]; hostId: string }) => {
       if (!this.scene.isActive('LobbyScene')) return;
-      const state = s as NetworkGameState;
-      if (state.roomCode) {
-        this.roomCodeText.setText(`CODE: ${state.roomCode}`);
-      }
-      this.rebuildPlayerList(state);
+      this.lobbyPlayers = data.players;
+      this.isHost = data.hostId === this.room.sessionId;
+      this.startButton.setVisible(this.isHost);
+      this.rebuildPlayerList();
     });
 
-    // Seed immediately if the state is already populated (fast / local dev).
-    const cur = this.room.state as NetworkGameState;
-    if (cur?.roomCode) {
-      this.roomCodeText.setText(`CODE: ${cur.roomCode}`);
-      this.rebuildPlayerList(cur);
-    }
-
-    // Server broadcasts 'gameStart' when any player sends 'startGame'.
-    // All clients in the lobby receive this and transition together.
+    // Server broadcasts 'gameStart' when the host sends 'startGame'.
     this.room.onMessage('gameStart', () => {
       this.scene.start('GameScene', { room: this.room, network: this.network });
     });
+
+    // Seed room code from state if already available (fast / local dev).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cur = this.room.state as any;
+    if (cur?.roomCode) {
+      this.roomCodeText.setText(`CODE: ${String(cur.roomCode)}`);
+    }
   }
 
   // ── Player list ───────────────────────────────────────────────────────────
 
-  private rebuildPlayerList(state: NetworkGameState): void {
+  private rebuildPlayerList(): void {
     this.playerListContainer.removeAll(true);
 
-    let index = 0;
-    state.players.forEach((player: NetworkPlayer) => {
-      const rowY = index * 16;
+    this.lobbyPlayers.forEach((player, index) => {
+      const rowY = index * 18;
       const dotColor = PLAYER_COLORS[player.color] ?? 0xffffff;
-      const dot = this.add.rectangle(4, rowY, 7, 7, dotColor);
+      const dot = this.add.rectangle(4, rowY + 4, 8, 8, dotColor);
       const isMe = player.id === this.room.sessionId;
-      const label = isMe ? `${player.name} (you)` : player.name;
-      const nameText = this.add.text(14, rowY, label, {
-        ...FONT, fontSize: '7px',
+      const isHostPlayer = this.isHost && isMe;
+      let label = isMe ? `${player.name} (you)` : player.name;
+      if (isHostPlayer) label += ' [HOST]';
+      const nameText = this.add.text(16, rowY + 4, label, {
+        ...FONT, fontSize: '6px',
         color: isMe ? '#ffffff' : '#aaaaaa',
       }).setOrigin(0, 0.5);
       this.playerListContainer.add([dot, nameText]);
-      index++;
     });
 
-    this.playerCountText.setText(`${index} / 8 players`);
+    this.playerCountText.setText(`${this.lobbyPlayers.length} / 8 players`);
   }
 
   // ── Chat ──────────────────────────────────────────────────────────────────

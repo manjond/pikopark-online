@@ -37,6 +37,12 @@ export class GameRoom extends Room<GameState> {
   /** Prevents broadcasting levelComplete more than once per level. */
   private levelCompleted = false;
 
+  /** Session ID of the first player to join — only they can start the game. */
+  private hostId = '';
+
+  /** Previous objectStates activation snapshot — used to detect changes. */
+  private prevObjStates = new Map<string, boolean>();
+
   onCreate(_options: Record<string, unknown>): void {
     this.setState(new GameState());
     this.state.roomCode = this.generateRoomCode();
@@ -52,10 +58,11 @@ export class GameRoom extends Room<GameState> {
       // TODO: track per-player ready state; start when all are ready
     });
 
-    // Any player can start the game; server broadcasts so every lobby
-    // client transitions to GameScene at the same time.
-    this.onMessage('startGame', (_client) => {
-      this.broadcast('gameStart', {});
+    // Only the host (first to join) can start the game.
+    this.onMessage('startGame', (client) => {
+      if (client.sessionId === this.hostId) {
+        this.broadcast('gameStart', {});
+      }
     });
 
     this.onMessage<{ text: string }>('chat', (client, data) => {
@@ -90,10 +97,21 @@ export class GameRoom extends Room<GameState> {
     this.state.players.set(client.sessionId, player);
     this.broadcast('playerJoined', { name: player.name, color: player.color });
 
+    // First player to join becomes host.
+    if (this.hostId === '') this.hostId = client.sessionId;
+
     // Send room code directly to this client.
-    // Messages sent during onJoin are enqueued and delivered AFTER ROOM_STATE,
-    // so the client's state is fully populated when this message arrives.
     client.send('roomCode', { code: this.state.roomCode });
+
+    // Send current object states so the new client can sync immediately.
+    const objStates: Array<{ id: string; activated: boolean }> = [];
+    this.state.interactiveObjects.forEach((obj) => {
+      objStates.push({ id: obj.id, activated: obj.activated });
+    });
+    if (objStates.length > 0) client.send('objectStates', objStates);
+
+    // Broadcast updated player list to everyone.
+    this.broadcastPlayerList();
   }
 
   onLeave(client: Client, _consented: boolean): void {
@@ -102,6 +120,16 @@ export class GameRoom extends Room<GameState> {
       this.broadcast('playerLeft', { name: player.name });
       this.state.players.delete(client.sessionId);
     }
+
+    // If the host left, assign the next player as host.
+    if (client.sessionId === this.hostId) {
+      this.hostId = '';
+      this.state.players.forEach((p) => {
+        if (!this.hostId) this.hostId = p.id;
+      });
+    }
+
+    this.broadcastPlayerList();
   }
 
   onDispose(): void {
@@ -119,6 +147,7 @@ export class GameRoom extends Room<GameState> {
 
     // Clear and repopulate interactive objects
     this.state.interactiveObjects.clear();
+    this.prevObjStates.clear();
     for (const def of levelData.objects) {
       const obj = new ObjectState();
       obj.id = def.id;
@@ -132,6 +161,7 @@ export class GameRoom extends Room<GameState> {
       obj.latching = def.latching ?? false;
       obj.activated = false;
       this.state.interactiveObjects.set(def.id, obj);
+      this.prevObjStates.set(def.id, false);
     }
 
     // Respawn all existing players at the new level's spawn points
@@ -150,8 +180,14 @@ export class GameRoom extends Room<GameState> {
     });
 
     if (levelIndex > 0) {
-      // Notify clients to rebuild their tile geometry for this level
+      // Notify clients to rebuild their tile geometry and objects for this level.
       this.broadcast('levelStart', { levelId: levelData.id });
+      // Send initial object states (all deactivated) for new level.
+      const objStates: Array<{ id: string; activated: boolean }> = [];
+      this.state.interactiveObjects.forEach((obj) => {
+        objStates.push({ id: obj.id, activated: obj.activated });
+      });
+      this.broadcast('objectStates', objStates);
     }
   }
 
@@ -337,9 +373,50 @@ export class GameRoom extends Room<GameState> {
         });
       });
     }
+
+    // ── 7. Broadcast player positions every tick ────────────────────────────────
+    const playerPositions: Array<{ id: string; x: number; y: number; vx: number; grounded: boolean; anim: string }> = [];
+    this.state.players.forEach((p) => {
+      playerPositions.push({
+        id: p.id,
+        x: p.x,
+        y: p.y,
+        vx: p.velocityX,
+        grounded: p.isGrounded,
+        anim: p.animation,
+      });
+    });
+    if (playerPositions.length > 0) {
+      this.broadcast('positions', playerPositions);
+    }
+
+    // ── 8. Broadcast object states only when something changed ──────────────────
+    let objChanged = false;
+    this.state.interactiveObjects.forEach((obj) => {
+      if (this.prevObjStates.get(obj.id) !== obj.activated) {
+        objChanged = true;
+        this.prevObjStates.set(obj.id, obj.activated);
+      }
+    });
+    if (objChanged) {
+      const objStates: Array<{ id: string; activated: boolean }> = [];
+      this.state.interactiveObjects.forEach((obj) => {
+        objStates.push({ id: obj.id, activated: obj.activated });
+      });
+      this.broadcast('objectStates', objStates);
+    }
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  /** Broadcast the current player roster and host to all clients. */
+  private broadcastPlayerList(): void {
+    const players: Array<{ id: string; name: string; color: number }> = [];
+    this.state.players.forEach((p) => {
+      players.push({ id: p.id, name: p.name, color: p.color });
+    });
+    this.broadcast('playerList', { players, hostId: this.hostId });
+  }
 
   private generateRoomCode(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';

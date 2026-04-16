@@ -69,11 +69,11 @@ export class InteractiveObject {
 
   private prevActivated = false;
 
-  sync(data: NetworkObject): void {
-    if (data.type === 'button') {
+  sync(data: Pick<NetworkObject, 'activated'>): void {
+    if (this.type === 'button') {
       if (data.activated && !this.prevActivated) playButtonPress();
       this.rect.setFillStyle(data.activated ? BUTTON_ACTIVE : BUTTON_INACTIVE);
-    } else if (data.type === 'door') {
+    } else if (this.type === 'door') {
       if (data.activated && !this.prevActivated) playDoorOpen();
       this.rect.setVisible(!data.activated);
       if (this.doorImg?.body) {
