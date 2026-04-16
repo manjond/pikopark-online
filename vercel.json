@@ -1,5 +1,5 @@
 {
-  "buildCommand": "bash build-vercel.sh",
+  "buildCommand": "cd shared && npm run build && cd .. && cd client && npm run build",
   "outputDirectory": "client/dist",
   "installCommand": "npm install",
   "framework": null,
