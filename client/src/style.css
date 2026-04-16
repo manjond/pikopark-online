@@ -16,3 +16,15 @@ body {
 canvas {
   image-rendering: auto;
 }
+
+#version {
+  position: fixed;
+  bottom: 8px;
+  left: 8px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: #444466;
+  pointer-events: none;
+  z-index: 9999;
+  user-select: none;
+}
