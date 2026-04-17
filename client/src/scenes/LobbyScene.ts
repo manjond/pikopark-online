@@ -211,8 +211,14 @@ export class LobbyScene extends Phaser.Scene {
       this.rebuildPlayerList();
     });
 
-    this.room.onMessage('gameStart', () => {
-      this.scene.start('GameScene', { room: this.room, network: this.network });
+    this.room.onMessage('gameStart', (data: { packId?: string; levelId?: number; mapWidth?: number } = {}) => {
+      this.scene.start('GameScene', {
+        room: this.room,
+        network: this.network,
+        packId: data.packId ?? this.selectedPackId,
+        levelId: data.levelId,
+        mapWidth: data.mapWidth,
+      });
     });
 
     this.room.onMessage('packSelected', (data: { packId: string; name: string; minPlayers: number }) => {

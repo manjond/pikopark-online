@@ -26,6 +26,9 @@ import { playJump, playLevelComplete, startBgMusic, stopBgMusic } from '../utils
 interface GameSceneData {
   room?: Room;
   network?: ColyseusClient;
+  packId?: string;
+  levelId?: number;
+  mapWidth?: number;
 }
 
 interface PositionMsg {
@@ -83,6 +86,11 @@ export class GameScene extends Phaser.Scene {
   private preConnectedRoom: Room | null = null;
   private preConnectedNetwork: ColyseusClient | null = null;
 
+  // ── Initial level info passed from LobbyScene ─────────────────────────────
+  private initialPackId: string | null = null;
+  private initialLevelId: number | null = null;
+  private initialMapWidth: number | null = null;
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -90,13 +98,28 @@ export class GameScene extends Phaser.Scene {
   init(data: GameSceneData): void {
     this.preConnectedRoom = data.room ?? null;
     this.preConnectedNetwork = data.network ?? null;
+    this.initialPackId = data.packId ?? null;
+    this.initialLevelId = data.levelId ?? null;
+    this.initialMapWidth = data.mapWidth ?? null;
   }
 
   create(): void {
-    const startLevel = ALL_PACKS[0]?.levels[0];
+    // Resolve the initial level from scene data (sent by the server in
+    // gameStart). Falls back to the selected pack's first level, then to
+    // Basics L1. This prevents the client from rendering the wrong level
+    // when the host selected Duo/Hazards/Squad/Extreme.
+    const allLevels: LevelData[] = ALL_PACKS.flatMap((p) => p.levels);
+    const byId = this.initialLevelId !== null
+      ? allLevels.find((l) => l.id === this.initialLevelId)
+      : undefined;
+    const byPack = this.initialPackId
+      ? ALL_PACKS.find((p) => p.id === this.initialPackId)?.levels[0]
+      : undefined;
+    const startLevel = byId ?? byPack ?? ALL_PACKS[0]?.levels[0];
+    const startMapWidth = this.initialMapWidth ?? startLevel?.mapWidth ?? GAME_WIDTH;
 
-    this.physics.world.setBounds(0, 0, startLevel?.mapWidth ?? GAME_WIDTH, GAME_HEIGHT);
-    this.cameras.main.setBounds(0, 0, startLevel?.mapWidth ?? GAME_WIDTH, GAME_HEIGHT);
+    this.physics.world.setBounds(0, 0, startMapWidth, GAME_HEIGHT);
+    this.cameras.main.setBounds(0, 0, startMapWidth, GAME_HEIGHT);
 
     // ── Level geometry ─────────────────────────────────────────────────────
     this.generateTileTextures();

@@ -68,7 +68,15 @@ export class GameRoom extends Room<GameState> {
         return;
       }
       this.gameStarted = true;
-      this.broadcast('gameStart', {});
+      // Send the current level info so clients can render the correct first
+      // level (not assume Basics L1). Prevents visual/physics desync when
+      // the host selected Duo/Hazards/Squad/Extreme.
+      const firstLevel = this.selectedPack.levels[this.currentLevelIndex] ?? this.selectedPack.levels[0]!;
+      this.broadcast('gameStart', {
+        packId: this.selectedPack.id,
+        levelId: firstLevel.id,
+        mapWidth: firstLevel.mapWidth ?? GAME_WIDTH,
+      });
     });
 
     this.onMessage<{ text: string }>('chat', (client, data) => {
