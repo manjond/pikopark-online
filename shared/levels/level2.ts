@@ -18,6 +18,7 @@ const HIGH_PLATFORM_W   = 256;
 export const LEVEL_2: LevelData = {
   id: 2,
   name: 'Shoulders',
+  minPlayers: 2,
 
   solidRects: [
     { x: 0, y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },

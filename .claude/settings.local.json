@@ -5,7 +5,18 @@
       "Bash(timeout 10 npm run dev --workspace=server)",
       "Bash(timeout 12 npm run dev --workspace=server)",
       "Bash(npx tsc:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git rm *)",
+      "Bash(git push *)",
+      "Bash(xargs grep *)",
+      "Bash(grep -n 'onAdd\\\\|onChange\\\\|onRemove\\\\|$items\\\\|forEach' node_modules/@colyseus/schema/build/cjs/index.js)",
+      "Bash(grep -n 'MapSchema\\\\|onAdd\\\\|$callbacks\\\\|OPERATION\\\\|triggerAll\\\\|ADD\\\\b' node_modules/@colyseus/schema/build/cjs/index.js)",
+      "Bash(grep -n 'players\\\\|MapSchema\\\\|decod\\\\|REPLACE\\\\|ADD\\\\|set\\(\\\\|getByIndex\\\\|$callbacks' node_modules/@colyseus/schema/build/cjs/index.js)",
+      "Bash(grep -n 'triggerAllFilled\\\\|triggerAll\\\\|callbacks.*ADD\\\\|$callbacks\\\\[.*ADD' node_modules/@colyseus/schema/build/cjs/index.js)",
+      "Bash(node -e ' *)",
+      "Bash(node)"
     ]
   }
 }

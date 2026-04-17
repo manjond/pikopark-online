@@ -234,6 +234,15 @@ on the client side — they will silently return nothing and the bug will reappe
 - [ ] Custom domain
 - [ ] Basic analytics (Plausible or simple counter)
 
+### Phase 5.5 — Level Packs & Scrolling ✅
+- [x] `minPlayers` requirement per level and per pack
+- [x] `mapWidth` per level — levels wider than 1280px scroll horizontally
+- [x] Camera follows local player on wide maps
+- [x] AND-logic button→door propagation (multiple buttons can share one door)
+- [x] 3 packs: Basics (1p+, 5 levels), Duo (2p+, 5 levels), Squad (4p+, 5 levels)
+- [x] Lobby pack selector — host picks pack; minPlayers enforced before start
+- [x] Server rejects startGame if players < pack.minPlayers with `startError` message
+
 ### Phase 6 — Nice to Have
 - [ ] Spectator mode (join as observer, no player sprite)
 - [ ] Persistent leaderboard (fastest room times per level)

@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { Room } from 'colyseus.js';
 import { ColyseusClient } from '../network/ColyseusClient';
-import { PLAYER_COLORS } from '@pikopark/shared';
+import { PLAYER_COLORS, ALL_PACKS } from '@pikopark/shared';
 
 interface LobbyData {
   room: Room;
@@ -28,6 +28,12 @@ export class LobbyScene extends Phaser.Scene {
 
   // ── Left panel ────────────────────────────────────────────────────────────
   private roomCodeText!: Phaser.GameObjects.Text;
+
+  // ── Pack selection ────────────────────────────────────────────────────────
+  private packButtons: Phaser.GameObjects.Text[] = [];
+  private packInfoText!: Phaser.GameObjects.Text;
+  private packErrorText!: Phaser.GameObjects.Text;
+  private selectedPackId = 'basics';
   private playerListContainer!: Phaser.GameObjects.Container;
   private playerCountText!: Phaser.GameObjects.Text;
   private startButton!: Phaser.GameObjects.Text;
@@ -90,11 +96,40 @@ export class LobbyScene extends Phaser.Scene {
     // ── Player list ───────────────────────────────────────────────────────────
     this.playerListContainer = this.add.container(24, 182);
 
+    // ── Pack selector ─────────────────────────────────────────────────────────
+    this.add.rectangle(lx, H - 310, this.SPLIT - 40, 2, 0x333355);
+    this.add.text(lx, H - 292, 'PACK', {
+      ...FONT, fontSize: '11px', color: '#888888',
+    }).setOrigin(0.5);
+
+    ALL_PACKS.forEach((pack: typeof ALL_PACKS[number], i: number) => {
+      const btnY = H - 258 + i * 42;
+      const btn = this.add.text(lx, btnY, `${pack.name}  (${pack.minPlayers}p+)`, {
+        ...FONT, fontSize: '11px', color: '#555555',
+      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+
+      btn.on('pointerover', () => { if (pack.id !== this.selectedPackId) btn.setColor('#aaaaaa'); });
+      btn.on('pointerout',  () => { if (pack.id !== this.selectedPackId) btn.setColor('#555555'); });
+      btn.on('pointerdown', () => {
+        if (!this.isHost) return;
+        this.room.send('selectPack', { packId: pack.id });
+      });
+      this.packButtons.push(btn);
+    });
+
+    this.packInfoText = this.add.text(lx, H - 134, '', {
+      ...FONT, fontSize: '10px', color: '#888888',
+    }).setOrigin(0.5);
+
+    this.packErrorText = this.add.text(lx, H - 116, '', {
+      ...FONT, fontSize: '9px', color: '#ff4444',
+    }).setOrigin(0.5);
+
     // ── Divider above buttons ─────────────────────────────────────────────────
-    this.add.rectangle(lx, H - 130, this.SPLIT - 40, 2, 0x333355);
+    this.add.rectangle(lx, H - 100, this.SPLIT - 40, 2, 0x333355);
 
     // ── START GAME — visible only to host ─────────────────────────────────────
-    this.startButton = this.add.text(lx, H - 96, 'START GAME', {
+    this.startButton = this.add.text(lx, H - 76, 'START GAME', {
       ...FONT, fontSize: '20px', color: '#00ff00',
     })
       .setOrigin(0.5)
@@ -105,7 +140,7 @@ export class LobbyScene extends Phaser.Scene {
     this.startButton.on('pointerout',  () => this.startButton.setColor('#00ff00'));
     this.startButton.on('pointerdown', () => { this.room.send('startGame', {}); });
 
-    this.makeButton(lx, H - 44, 'LEAVE', '#666666', () => {
+    this.makeButton(lx, H - 32, 'LEAVE', '#666666', () => {
       void this.room.leave();
       this.scene.start('MenuScene');
     });
@@ -150,6 +185,20 @@ export class LobbyScene extends Phaser.Scene {
 
     this.room.onMessage('gameStart', () => {
       this.scene.start('GameScene', { room: this.room, network: this.network });
+    });
+
+    this.room.onMessage('packSelected', (data: { packId: string; name: string; minPlayers: number }) => {
+      this.selectedPackId = data.packId;
+      this.packInfoText.setText(`${data.name} — min ${data.minPlayers} players`);
+      this.packErrorText.setText('');
+      this.packButtons.forEach((btn, i) => {
+        const pack = ALL_PACKS[i];
+        btn.setColor(pack?.id === data.packId ? '#00ff88' : '#555555');
+      });
+    });
+
+    this.room.onMessage('startError', (data: { message: string }) => {
+      this.packErrorText.setText(data.message);
     });
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

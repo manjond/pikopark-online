@@ -7,7 +7,8 @@ const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 672
 
 export const LEVEL_1: LevelData = {
   id: 1,
-  name: 'Level 1',
+  name: 'First Steps',
+  minPlayers: 1,
 
   solidRects: [
     { x: 0,   y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },

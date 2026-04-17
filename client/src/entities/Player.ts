@@ -39,6 +39,9 @@ export class Player {
   /** Fires once when the player leaves the ground — used for jump sound. */
   onJump: (() => void) | null = null;
 
+  get x(): number { return this.sprite.x; }
+  get y(): number { return this.sprite.y; }
+
   constructor(scene: Phaser.Scene, x: number, y: number, colorIndex: number) {
     this.colorIndex = colorIndex;
     this.prevX = x;

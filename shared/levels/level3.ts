@@ -16,6 +16,7 @@ const BTN_PLATFORM_TOP = 395; // stacking-only
 export const LEVEL_3: LevelData = {
   id: 3,
   name: 'Up and Over',
+  minPlayers: 2,
 
   solidRects: [
     { x: 0, y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },

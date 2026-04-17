@@ -33,7 +33,20 @@ export interface LevelObjectDef {
 export interface LevelData {
   id: number;
   name: string;
+  /** Minimum players required to attempt this level. */
+  minPlayers: number;
+  /** Total map width in pixels. Defaults to GAME_WIDTH if omitted. */
+  mapWidth?: number;
   solidRects: SolidRect[];
   spawnPoints: SpawnPoint[];
   objects: LevelObjectDef[];
+}
+
+/** A named collection of levels with a shared minimum-player requirement. */
+export interface LevelPack {
+  id: string;
+  name: string;
+  /** Minimum players needed to play any level in this pack. */
+  minPlayers: number;
+  levels: LevelData[];
 }

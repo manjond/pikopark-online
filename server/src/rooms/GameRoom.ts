@@ -12,19 +12,15 @@ import {
   GRAVITY,
   SolidRect,
   LevelData,
-  LEVEL_1,
-  LEVEL_2,
-  LEVEL_3,
-  LEVEL_4,
-  LEVEL_5,
+  LevelPack,
+  ALL_PACKS,
+  PACK_BASICS,
 } from '@pikopark/shared';
 
 const FLOOR_Y = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // player center when on ground
 
 /** Number of physics sub-steps per server tick — reduces tunnelling. */
 const SUBSTEPS = 3;
-
-const LEVELS: LevelData[] = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
 
 export class GameRoom extends Room<GameState> {
   maxClients = MAX_PLAYERS;
@@ -35,6 +31,11 @@ export class GameRoom extends Room<GameState> {
   private hostId = '';
   private prevObjStates = new Map<string, boolean>();
   private tickCount = 0;
+
+  // Pack selection — host can change this before game starts
+  private selectedPack: LevelPack = PACK_BASICS;
+  private gameStarted = false;
+  private mapWidth = GAME_WIDTH; // current level's map width
 
   onCreate(_options: Record<string, unknown>): void {
     this.setState(new GameState());
@@ -47,12 +48,26 @@ export class GameRoom extends Room<GameState> {
       handlePlayerInput(this.state, client, message);
     });
 
-    this.onMessage('ready', (_client) => { /* future: per-player ready gate */ });
+    this.onMessage<{ packId: string }>('selectPack', (client, data) => {
+      if (client.sessionId !== this.hostId || this.gameStarted) return;
+      const pack = ALL_PACKS.find((p) => p.id === data.packId);
+      if (!pack) return;
+      this.selectedPack = pack;
+      this.loadLevel(0); // reset to first level of new pack in lobby preview
+      this.broadcastPackInfo();
+    });
 
     this.onMessage('startGame', (client) => {
-      if (client.sessionId === this.hostId) {
-        this.broadcast('gameStart', {});
+      if (client.sessionId !== this.hostId) return;
+      const playerCount = this.state.players.size;
+      if (playerCount < this.selectedPack.minPlayers) {
+        client.send('startError', {
+          message: `Need ${this.selectedPack.minPlayers} players — only ${playerCount} connected`,
+        });
+        return;
       }
+      this.gameStarted = true;
+      this.broadcast('gameStart', {});
     });
 
     this.onMessage<{ text: string }>('chat', (client, data) => {
@@ -75,7 +90,7 @@ export class GameRoom extends Room<GameState> {
     player.color = this.state.players.size % MAX_PLAYERS;
 
     const spawnIndex = this.state.players.size;
-    const levelData = LEVELS[this.currentLevelIndex] ?? LEVEL_1;
+    const levelData = this.selectedPack.levels[this.currentLevelIndex] ?? this.selectedPack.levels[0]!;
     const spawn = levelData.spawnPoints[spawnIndex] ?? {
       x: TILE_SIZE / 2 + spawnIndex * (TILE_SIZE + 8),
       y: FLOOR_Y,
@@ -90,6 +105,11 @@ export class GameRoom extends Room<GameState> {
     if (this.hostId === '') this.hostId = client.sessionId;
 
     client.send('roomCode', { code: this.state.roomCode });
+    client.send('packSelected', {
+      packId: this.selectedPack.id,
+      name: this.selectedPack.name,
+      minPlayers: this.selectedPack.minPlayers,
+    });
 
     // Send current object states to the new joiner immediately
     const objStates: Array<{ id: string; activated: boolean }> = [];
@@ -119,8 +139,10 @@ export class GameRoom extends Room<GameState> {
   // ─── Level loading ────────────────────────────────────────────────────────────
 
   private loadLevel(levelIndex: number): void {
-    const levelData = LEVELS[levelIndex] ?? LEVEL_1;
+    const levels = this.selectedPack.levels;
+    const levelData: LevelData = levels[levelIndex] ?? levels[0] ?? this.selectedPack.levels[0];
     this.currentLevelIndex = levelIndex;
+    this.mapWidth = levelData.mapWidth ?? GAME_WIDTH;
     this.solidRects = levelData.solidRects;
     this.levelCompleted = false;
     this.state.currentLevel = levelData.id;
@@ -158,7 +180,7 @@ export class GameRoom extends Room<GameState> {
     });
 
     if (levelIndex > 0) {
-      this.broadcast('levelStart', { levelId: levelData.id });
+      this.broadcast('levelStart', { levelId: levelData.id, mapWidth: this.mapWidth });
       const objStates: Array<{ id: string; activated: boolean }> = [];
       this.state.interactiveObjects.forEach((obj) => {
         objStates.push({ id: obj.id, activated: obj.activated });
@@ -200,7 +222,7 @@ export class GameRoom extends Room<GameState> {
         player.x += player.velocityX * subDt;
         player.y += player.velocityY * subDt;
 
-        player.x = Math.max(TILE_SIZE / 2, Math.min(GAME_WIDTH - TILE_SIZE / 2, player.x));
+        player.x = Math.max(TILE_SIZE / 2, Math.min(this.mapWidth - TILE_SIZE / 2, player.x));
         player.isGrounded = false;
 
         const pLeft   = player.x - TILE_SIZE / 2;
@@ -314,7 +336,7 @@ export class GameRoom extends Room<GameState> {
         if (horizOverlap && Math.abs(aFeet - bHead) < TILE_SIZE * 0.25) {
           // A is standing on B — carry with B's velocity
           pA.x += pB.velocityX * (dt / 1); // use full dt (carry runs once, not per substep)
-          pA.x = Math.max(TILE_SIZE / 2, Math.min(GAME_WIDTH - TILE_SIZE / 2, pA.x));
+          pA.x = Math.max(TILE_SIZE / 2, Math.min(this.mapWidth - TILE_SIZE / 2, pA.x));
           break;
         }
       }
@@ -349,11 +371,19 @@ export class GameRoom extends Room<GameState> {
       if (count >= needed) obj.activated = true;
     });
 
-    // ── Propagate button → linked door ─────────────────────────────────────────
+    // ── Propagate button → linked door (AND logic: ALL buttons must activate) ──
+    // Multiple buttons can share one door — all must be active to open it.
+    const doorVotes = new Map<string, { total: number; active: number }>();
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type !== 'button' || !obj.linkedId) return;
-      const door = this.state.interactiveObjects.get(obj.linkedId);
-      if (door) door.activated = obj.activated;
+      const v = doorVotes.get(obj.linkedId) ?? { total: 0, active: 0 };
+      v.total++;
+      if (obj.activated) v.active++;
+      doorVotes.set(obj.linkedId, v);
+    });
+    doorVotes.forEach((v, doorId) => {
+      const door = this.state.interactiveObjects.get(doorId);
+      if (door) door.activated = v.active >= v.total;
     });
 
     // ── Goal detection ─────────────────────────────────────────────────────────
@@ -374,7 +404,7 @@ export class GameRoom extends Room<GameState> {
             this.levelCompleted = true;
             this.broadcast('levelComplete', { playerName: player.name });
             const nextIndex = this.currentLevelIndex + 1;
-            if (nextIndex < LEVELS.length) {
+            if (nextIndex < this.selectedPack.levels.length) {
               this.clock.setTimeout(() => { this.loadLevel(nextIndex); }, 5000);
             }
           }
@@ -410,6 +440,14 @@ export class GameRoom extends Room<GameState> {
     const players: Array<{ id: string; name: string; color: number }> = [];
     this.state.players.forEach((p) => players.push({ id: p.id, name: p.name, color: p.color }));
     this.broadcast('playerList', { players, hostId: this.hostId });
+  }
+
+  private broadcastPackInfo(): void {
+    this.broadcast('packSelected', {
+      packId: this.selectedPack.id,
+      name: this.selectedPack.name,
+      minPlayers: this.selectedPack.minPlayers,
+    });
   }
 
   private generateRoomCode(): string {

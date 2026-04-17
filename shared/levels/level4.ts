@@ -16,6 +16,7 @@ const GOAL_PLATFORM_TOP = 507; // solo-reachable (507 > 421 in y-down means it's
 export const LEVEL_4: LevelData = {
   id: 4,
   name: 'Together',
+  minPlayers: 2,
 
   solidRects: [
     { x: 0, y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },

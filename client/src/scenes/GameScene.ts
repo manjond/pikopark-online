@@ -12,13 +12,10 @@ import {
   GAME_HEIGHT,
   TILE_SIZE,
   InputMessage,
-  LEVEL_1,
-  LEVEL_2,
-  LEVEL_3,
-  LEVEL_4,
-  LEVEL_5,
+  ALL_PACKS,
   SolidRect,
   LevelObjectDef,
+  LevelData,
 } from '@pikopark/shared';
 import {
   generatePlayerSpritesheet,
@@ -96,20 +93,23 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.physics.world.setBounds(0, 0, GAME_WIDTH, GAME_HEIGHT);
+    const startLevel = ALL_PACKS[0]?.levels[0];
+
+    this.physics.world.setBounds(0, 0, startLevel?.mapWidth ?? GAME_WIDTH, GAME_HEIGHT);
+    this.cameras.main.setBounds(0, 0, startLevel?.mapWidth ?? GAME_WIDTH, GAME_HEIGHT);
 
     // ── Level geometry ─────────────────────────────────────────────────────
     this.generateTileTextures();
     this.tiles = this.physics.add.staticGroup();
-    this.buildSolidRects(LEVEL_1.solidRects);
+    if (startLevel) this.buildSolidRects(startLevel.solidRects);
     this.tiles.refresh();
 
     // doorGroup holds door physics bodies for visual reference;
     // collision is server-authoritative so client-side bodies are cosmetic.
     this.doorGroup = this.physics.add.staticGroup();
 
-    // ── Load level 1 interactive objects immediately ───────────────────────
-    this.loadLevelObjects(LEVEL_1.objects);
+    // ── Load starting level interactive objects ────────────────────────────
+    if (startLevel) this.loadLevelObjects(startLevel.objects);
 
     // ── Input ──────────────────────────────────────────────────────────────
     this.cursors = this.input.keyboard!.createCursorKeys();
@@ -155,6 +155,17 @@ export class GameScene extends Phaser.Scene {
 
     // ── Advance all player sprites (lerp toward server target) ────────────
     this.players.forEach((p) => p.tick(delta));
+
+    // ── Camera follows the local player ───────────────────────────────────
+    if (this.localSessionId) {
+      const local = this.players.get(this.localSessionId);
+      if (local) {
+        this.cameras.main.centerOn(
+          Phaser.Math.Clamp(local.x, GAME_WIDTH / 2, (this.physics.world.bounds.width || GAME_WIDTH) - GAME_WIDTH / 2),
+          GAME_HEIGHT / 2,
+        );
+      }
+    }
 
     if (this.room === null) return;
 
@@ -218,7 +229,7 @@ export class GameScene extends Phaser.Scene {
           registerPlayerAnims(this, p.color);
 
           // Spawn at a neutral position; first 'positions' message will move them
-          const spawn = LEVEL_1.spawnPoints[0] ?? { x: TILE_SIZE * 2, y: GAME_HEIGHT - TILE_SIZE * 2 };
+          const spawn = { x: TILE_SIZE * 2, y: GAME_HEIGHT - TILE_SIZE * 2 };
           const sprite = new Player(this, spawn.x, spawn.y, p.color);
 
           // Play jump sound when the LOCAL player takes off
@@ -261,8 +272,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Level transition ───────────────────────────────────────────────────
-    room.onMessage('levelStart', (data: { levelId: number }) => {
-      this.rebuildLevel(data.levelId);
+    room.onMessage('levelStart', (data: { levelId: number; mapWidth?: number }) => {
+      this.rebuildLevel(data.levelId, data.mapWidth);
     });
 
     console.log(`[GameScene] Connected → room ${room.id} (${room.sessionId})`);
@@ -296,9 +307,13 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private rebuildLevel(levelId: number): void {
-    const allLevels = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
-    const levelData = allLevels.find((l) => l.id === levelId) ?? LEVEL_1;
+  private rebuildLevel(levelId: number, mapWidth?: number): void {
+    const allLevels: LevelData[] = ALL_PACKS.flatMap((p) => p.levels);
+    const levelData = allLevels.find((l) => l.id === levelId) ?? ALL_PACKS[0]!.levels[0]!;
+    const mw = mapWidth ?? levelData.mapWidth ?? GAME_WIDTH;
+
+    this.physics.world.setBounds(0, 0, mw, GAME_HEIGHT);
+    this.cameras.main.setBounds(0, 0, mw, GAME_HEIGHT);
 
     // Clear level-complete overlay
     this.levelCompleteOverlay.forEach((obj) => obj.destroy());
@@ -334,19 +349,21 @@ export class GameScene extends Phaser.Scene {
     const cy = GAME_HEIGHT / 2;
     const FONT = { fontFamily: '"Press Start 2P"' };
 
-    const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.75).setDepth(20);
+    const sf = { scrollFactorX: 0, scrollFactorY: 0 };
+    const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.75).setDepth(20).setScrollFactor(0);
     const t1 = this.add.text(cx, cy - 34, 'LEVEL COMPLETE!', {
       ...FONT, fontSize: '10px', color: '#ffd700',
-    }).setOrigin(0.5).setDepth(21);
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
     const t2 = this.add.text(cx, cy - 12, `${winnerName} reached the goal`, {
       ...FONT, fontSize: '6px', color: '#ffffff',
-    }).setOrigin(0.5).setDepth(21);
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
     const t3 = this.add.text(cx, cy + 4, `Time: ${timeStr}`, {
       ...FONT, fontSize: '6px', color: '#00ff88',
-    }).setOrigin(0.5).setDepth(21);
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
     const t4 = this.add.text(cx, cy + 20, 'Next level loading...', {
       ...FONT, fontSize: '6px', color: '#888888',
-    }).setOrigin(0.5).setDepth(21);
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+    void sf; // suppress unused warning
 
     this.levelCompleteOverlay = [bg, t1, t2, t3, t4];
   }

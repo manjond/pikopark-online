@@ -13,6 +13,7 @@ const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
 export const LEVEL_5: LevelData = {
   id: 5,
   name: 'Chain',
+  minPlayers: 2,
 
   solidRects: [
     { x: 0, y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },
