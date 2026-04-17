@@ -56,6 +56,14 @@ export class GameScene extends Phaser.Scene {
 
   // ── Interactive objects ────────────────────────────────────────────────────
   private interactiveObjects = new Map<string, InteractiveObject>();
+  /** Tracks last-known activated state per door — used to detect open transitions. */
+  private doorPrevActivated = new Map<string, boolean>();
+  /** Position of the current level's goal (used for the level-complete burst). */
+  private goalPosition: { x: number; y: number } | null = null;
+
+  // ── Background (parallax) ──────────────────────────────────────────────────
+  private parallaxFar!: Phaser.GameObjects.TileSprite;
+  private parallaxNear!: Phaser.GameObjects.TileSprite;
 
   // ── Input ──────────────────────────────────────────────────────────────────
   private cursors!: Phaser.Types.Input.Keyboard.CursorKeys;
@@ -121,8 +129,11 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, startMapWidth, GAME_HEIGHT);
     this.cameras.main.setBounds(0, 0, startMapWidth, GAME_HEIGHT);
 
-    // ── Level geometry ─────────────────────────────────────────────────────
+    // ── Textures + parallax background (must exist before anything else) ──
     this.generateTileTextures();
+    this.createParallaxBackground();
+
+    // ── Level geometry ─────────────────────────────────────────────────────
     this.tiles = this.physics.add.staticGroup();
     if (startLevel) this.buildSolidRects(startLevel.solidRects);
     this.tiles.refresh();
@@ -190,6 +201,11 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
+    // ── Parallax — drift cloud layers relative to camera scroll ────────────
+    const sx = this.cameras.main.scrollX;
+    if (this.parallaxFar)  this.parallaxFar.tilePositionX  = sx * 0.2;
+    if (this.parallaxNear) this.parallaxNear.tilePositionX = sx * 0.5;
+
     if (this.room === null) return;
 
     // ── Send input to server ───────────────────────────────────────────────
@@ -241,11 +257,12 @@ export class GameScene extends Phaser.Scene {
         }
       });
 
-      // Create sprites for new players; update colors for existing ones
+      // Create sprites for new players; update colors/names for existing ones
       for (const p of data.players) {
         const existing = this.players.get(p.id);
         if (existing) {
           existing.updateColor(p.color, this);
+          existing.updateName(p.name);
         } else {
           // Pre-generate texture for this color so the sprite is ready
           generatePlayerSpritesheet(this, p.color);
@@ -253,7 +270,7 @@ export class GameScene extends Phaser.Scene {
 
           // Spawn at a neutral position; first 'positions' message will move them
           const spawn = { x: TILE_SIZE * 2, y: GAME_HEIGHT - TILE_SIZE * 2 };
-          const sprite = new Player(this, spawn.x, spawn.y, p.color);
+          const sprite = new Player(this, spawn.x, spawn.y, p.color, p.name);
 
           // Play jump sound when the LOCAL player takes off
           if (p.id === this.localSessionId) {
@@ -285,7 +302,16 @@ export class GameScene extends Phaser.Scene {
     // ── Interactive object state changes ───────────────────────────────────
     room.onMessage('objectStates', (list: Array<{ id: string; activated: boolean }>) => {
       for (const s of list) {
-        this.interactiveObjects.get(s.id)?.sync({ activated: s.activated });
+        const obj = this.interactiveObjects.get(s.id);
+        if (!obj) continue;
+        obj.sync({ activated: s.activated });
+
+        // Door opening → subtle shake for feedback
+        if (obj.type === 'door') {
+          const prev = this.doorPrevActivated.get(s.id) ?? false;
+          if (s.activated && !prev) this.cameras.main.shake(180, 0.006);
+          this.doorPrevActivated.set(s.id, s.activated);
+        }
       }
     });
 
@@ -313,6 +339,8 @@ export class GameScene extends Phaser.Scene {
     this.interactiveObjects.forEach((o) => o.destroy());
     this.interactiveObjects.clear();
     this.doorGroup.clear(true, true);
+    this.doorPrevActivated.clear();
+    this.goalPosition = null;
 
     for (const def of objects) {
       const iObj = new InteractiveObject(
@@ -332,6 +360,9 @@ export class GameScene extends Phaser.Scene {
         def.type === 'door' ? this.doorGroup : undefined,
       );
       this.interactiveObjects.set(def.id, iObj);
+
+      if (def.type === 'door') this.doorPrevActivated.set(def.id, false);
+      if (def.type === 'goal') this.goalPosition = { x: def.x, y: def.y };
     }
   }
 
@@ -366,6 +397,10 @@ export class GameScene extends Phaser.Scene {
 
   private showLevelComplete(winnerName: string): void {
     playLevelComplete();
+
+    // Screen shake + particle burst at the goal for impact
+    this.cameras.main.shake(420, 0.010);
+    this.emitGoalBurst();
 
     const elapsedMs = Date.now() - this.levelStartTime;
     const totalSecs = Math.floor(elapsedMs / 1000);
@@ -447,6 +482,82 @@ export class GameScene extends Phaser.Scene {
       g.generateTexture('door_body', 1, 1);
       g.destroy();
     }
+
+    // Cloud textures — two sizes for two parallax layers.
+    // Each tile is a short repeating strip with soft white blobs.
+    if (!this.textures.exists('cloud_far')) {
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 0.25);
+      g.fillCircle(40,  36, 22);
+      g.fillCircle(70,  30, 26);
+      g.fillCircle(100, 40, 20);
+      g.fillCircle(180, 20, 18);
+      g.fillCircle(210, 28, 24);
+      g.fillCircle(245, 22, 16);
+      g.generateTexture('cloud_far', 256, 80);
+      g.destroy();
+    }
+    if (!this.textures.exists('cloud_near')) {
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 0.45);
+      g.fillCircle(50,  70, 30);
+      g.fillCircle(90,  60, 36);
+      g.fillCircle(130, 72, 28);
+      g.fillCircle(230, 55, 26);
+      g.fillCircle(270, 68, 34);
+      g.fillCircle(310, 58, 24);
+      g.generateTexture('cloud_near', 384, 110);
+      g.destroy();
+    }
+
+    // Tiny 4×4 white square used for the goal particle burst
+    if (!this.textures.exists('burst_dot')) {
+      const g = this.add.graphics();
+      g.fillStyle(0xffffff, 1);
+      g.fillRect(0, 0, 4, 4);
+      g.generateTexture('burst_dot', 4, 4);
+      g.destroy();
+    }
+  }
+
+  // ─── Parallax background ──────────────────────────────────────────────────────
+
+  private createParallaxBackground(): void {
+    // Solid sky behind everything — covers the whole viewport regardless of pan.
+    this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x67aee0)
+      .setScrollFactor(0)
+      .setDepth(-30);
+
+    // Two TileSprites pinned to the camera; tilePositionX updates in update()
+    // to create the parallax drift. scrollFactor=0 keeps them on-screen for
+    // any map width, far layer slower than near layer.
+    this.parallaxFar = this.add.tileSprite(GAME_WIDTH / 2, 140, GAME_WIDTH, 80, 'cloud_far')
+      .setScrollFactor(0)
+      .setDepth(-20);
+
+    this.parallaxNear = this.add.tileSprite(GAME_WIDTH / 2, 220, GAME_WIDTH, 110, 'cloud_near')
+      .setScrollFactor(0)
+      .setDepth(-10);
+  }
+
+  // ─── Goal particle burst ──────────────────────────────────────────────────────
+
+  private emitGoalBurst(): void {
+    if (!this.goalPosition) return;
+    const { x, y } = this.goalPosition;
+    const emitter = this.add.particles(x, y, 'burst_dot', {
+      speed: { min: 120, max: 260 },
+      angle: { min: 0, max: 360 },
+      lifespan: { min: 500, max: 900 },
+      scale: { start: 2, end: 0 },
+      gravityY: 420,
+      tint: [0xffd700, 0xffffff, 0xffa800],
+      emitting: false,
+    });
+    emitter.setDepth(10);
+    emitter.explode(40);
+    // Clean up the emitter after the last particle dies
+    this.time.delayedCall(1200, () => emitter.destroy());
   }
 
   // ─── Touch controls ───────────────────────────────────────────────────────────

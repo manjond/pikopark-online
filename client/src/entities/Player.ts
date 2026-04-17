@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { TICK_RATE } from '@pikopark/shared';
+import { TICK_RATE, PLAYER_COLORS } from '@pikopark/shared';
 import {
   generatePlayerSpritesheet,
   registerPlayerAnims,
@@ -8,6 +8,12 @@ import {
 
 /** Duration of one server tick in ms — used as the lerp window. */
 const TICK_MS = 1000 / TICK_RATE; // 50 ms
+
+/** Vertical offset of the name tag above the sprite centre. */
+const NAME_TAG_OFFSET_Y = -26;
+
+const toHexColor = (rgb: number): string =>
+  `#${rgb.toString(16).padStart(6, '0')}`;
 
 /**
  * Player sprite driven entirely by server positions.
@@ -22,7 +28,9 @@ const TICK_MS = 1000 / TICK_RATE; // 50 ms
  */
 export class Player {
   private readonly sprite: Phaser.GameObjects.Sprite;
+  private readonly nameLabel: Phaser.GameObjects.Text;
   colorIndex: number;
+  private displayName: string;
 
   // Interpolation state
   private prevX: number;
@@ -42,8 +50,15 @@ export class Player {
   get x(): number { return this.sprite.x; }
   get y(): number { return this.sprite.y; }
 
-  constructor(scene: Phaser.Scene, x: number, y: number, colorIndex: number) {
+  constructor(
+    scene: Phaser.Scene,
+    x: number,
+    y: number,
+    colorIndex: number,
+    name: string,
+  ) {
     this.colorIndex = colorIndex;
+    this.displayName = name;
     this.prevX = x;
     this.prevY = y;
     this.targetX = x;
@@ -56,6 +71,15 @@ export class Player {
     this.sprite = scene.add.sprite(x, y, sheetKey, 'idle');
     this.sprite.play(`player_idle_${colorIndex}`);
     this.sprite.setDepth(1);
+
+    const colorHex = toHexColor(PLAYER_COLORS[colorIndex] ?? 0xffffff);
+    this.nameLabel = scene.add.text(x, y + NAME_TAG_OFFSET_Y, name, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: colorHex,
+      stroke: '#000000',
+      strokeThickness: 3,
+    }).setOrigin(0.5, 1).setDepth(5);
   }
 
   /**
@@ -70,6 +94,14 @@ export class Player {
     const sheetKey = `player_sheet_${colorIndex}`;
     this.sprite.setTexture(sheetKey, 'idle');
     this.sprite.play(resolveAnimKey(colorIndex, this.velocityX, this.isGrounded));
+    this.nameLabel.setColor(toHexColor(PLAYER_COLORS[colorIndex] ?? 0xffffff));
+  }
+
+  /** Update the floating name tag text. Cheap no-op when the name didn't change. */
+  updateName(name: string): void {
+    if (name === this.displayName) return;
+    this.displayName = name;
+    this.nameLabel.setText(name);
   }
 
   /**
@@ -106,6 +138,10 @@ export class Player {
     this.sprite.x = Phaser.Math.Linear(this.prevX, this.targetX, this.lerpAlpha);
     this.sprite.y = Phaser.Math.Linear(this.prevY, this.targetY, this.lerpAlpha);
 
+    // Keep the name tag glued above the sprite
+    this.nameLabel.x = this.sprite.x;
+    this.nameLabel.y = this.sprite.y + NAME_TAG_OFFSET_Y;
+
     // Face direction of travel
     if (this.velocityX < -1) this.sprite.setFlipX(true);
     else if (this.velocityX > 1) this.sprite.setFlipX(false);
@@ -119,5 +155,6 @@ export class Player {
 
   destroy(): void {
     this.sprite.destroy();
+    this.nameLabel.destroy();
   }
 }

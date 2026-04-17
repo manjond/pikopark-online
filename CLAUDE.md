@@ -223,9 +223,11 @@ on the client side — they will silently return nothing and the bug will reappe
 - [x] Web Audio API sound effects + background music
 - [x] Level complete overlay (winner name + elapsed time)
 - [x] Mobile touch controls (virtual D-pad + jump)
-- [ ] Background parallax layers
-- [ ] Player name tags above sprites in GameScene
+- [x] Background parallax layers (2 cloud layers drifting at 0.2×/0.5× camera)
+- [x] Player name tags above sprites in GameScene
 - [x] Animated goal (spinning gold star + glow + beacon beam)
+- [x] Screen shake on door open and level complete
+- [x] Particle burst at the goal on level complete
 
 ### Phase 5 — Deployment ✅
 - [x] Vite production build → `client/dist/`
