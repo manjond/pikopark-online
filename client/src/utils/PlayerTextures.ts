@@ -2,16 +2,17 @@ import Phaser from 'phaser';
 import { PLAYER_COLORS, TILE_SIZE } from '@pikopark/shared';
 
 /**
- * Generates a 4-frame (64×16) spritesheet texture for a single player color.
- * Texture key: `player_sheet_N` (N = colorIndex).
+ * Generates a 4-frame spritesheet texture for a player color.
+ * Frame size: TILE_SIZE × TILE_SIZE (32×32 at 1280×720).
+ *
+ * All pixel offsets are proportional via S = TILE_SIZE / 16 so the art
+ * scales correctly when TILE_SIZE changes.
  *
  * Frames left→right:
  *   0 idle   — symmetric stance
  *   1 walk_a — left foot forward
  *   2 walk_b — right foot forward
  *   3 jump   — legs tucked, arms raised
- *
- * The sprite faces RIGHT by default; flip X to face left.
  */
 export function generatePlayerSpritesheet(
   scene: Phaser.Scene,
@@ -20,59 +21,62 @@ export function generatePlayerSpritesheet(
   const key = `player_sheet_${colorIndex}`;
   if (scene.textures.exists(key)) return;
 
-  const color = PLAYER_COLORS[colorIndex] ?? 0xff0000;
-  const W = TILE_SIZE; // 16
-  const H = TILE_SIZE; // 16
+  const color = PLAYER_COLORS[colorIndex] ?? 0xff3333;
+  const W = TILE_SIZE;
+  const H = TILE_SIZE;
+  const S = W / 16; // scale factor — 2 at TILE_SIZE=32
 
   const g = scene.add.graphics();
 
   for (let frame = 0; frame < 4; frame++) {
     const ox = frame * W;
 
-    // ── Head + torso (main color, 10 px wide × 11 px tall) ──────────────────
+    // ── Head + torso ──────────────────────────────────────────────────────────
     g.fillStyle(color, 1);
-    g.fillRect(ox + 3, 0, 10, 11);
+    g.fillRect(ox + 3 * S, 0, 10 * S, 11 * S);
 
-    // ── Eyes — white background ──────────────────────────────────────────────
+    // ── White eye sockets ────────────────────────────────────────────────────
     g.fillStyle(0xffffff, 1);
-    g.fillRect(ox + 4, 3, 2, 2); // left
-    g.fillRect(ox + 9, 3, 2, 2); // right
+    g.fillRect(ox + 4 * S, 3 * S, 2 * S, 2 * S); // left
+    g.fillRect(ox + 9 * S, 3 * S, 2 * S, 2 * S); // right
 
-    // ── Pupils — look up during jump ─────────────────────────────────────────
+    // ── Pupils ───────────────────────────────────────────────────────────────
     g.fillStyle(0x111111, 1);
     if (frame === 3) {
-      // looking up — pupils at top of eye
-      g.fillRect(ox + 4, 3, 1, 1);
-      g.fillRect(ox + 9, 3, 1, 1);
+      // jump — pupils at top of eyes (looking up)
+      g.fillRect(ox + 4 * S, 3 * S, 1 * S, 1 * S);
+      g.fillRect(ox + 9 * S, 3 * S, 1 * S, 1 * S);
     } else {
-      // looking forward — pupils at center of eye
-      g.fillRect(ox + 5, 4, 1, 1);
-      g.fillRect(ox + 10, 4, 1, 1);
+      g.fillRect(ox + 5 * S, 4 * S, 1 * S, 1 * S);
+      g.fillRect(ox + 10 * S, 4 * S, 1 * S, 1 * S);
     }
 
-    // ── Legs (vary by frame) ─────────────────────────────────────────────────
+    // ── Darker shade on body sides for depth ─────────────────────────────────
+    const dark = darkenColor(color);
+    g.fillStyle(dark, 0.35);
+    g.fillRect(ox + 3 * S, 6 * S, 1 * S, 5 * S);   // left edge
+    g.fillRect(ox + 12 * S, 6 * S, 1 * S, 5 * S);  // right edge
+
+    // ── Legs ─────────────────────────────────────────────────────────────────
     g.fillStyle(color, 1);
     switch (frame) {
       case 0: // idle
-        g.fillRect(ox + 3, 11, 4, 5);  // left leg
-        g.fillRect(ox + 9, 11, 4, 5);  // right leg
+        g.fillRect(ox + 3 * S, 11 * S, 4 * S, 5 * S);
+        g.fillRect(ox + 9 * S, 11 * S, 4 * S, 5 * S);
         break;
-
-      case 1: // walk A — left forward
-        g.fillRect(ox + 2, 11, 4, 5);  // left leg (extended)
-        g.fillRect(ox + 9, 11, 4, 3);  // right leg (tucked)
+      case 1: // walk A — left leg forward
+        g.fillRect(ox + 2 * S, 11 * S, 4 * S, 5 * S);
+        g.fillRect(ox + 9 * S, 11 * S, 4 * S, 3 * S);
         break;
-
-      case 2: // walk B — right forward
-        g.fillRect(ox + 3, 11, 4, 3);  // left leg (tucked)
-        g.fillRect(ox + 10, 11, 4, 5); // right leg (extended)
+      case 2: // walk B — right leg forward
+        g.fillRect(ox + 3 * S, 11 * S, 4 * S, 3 * S);
+        g.fillRect(ox + 10 * S, 11 * S, 4 * S, 5 * S);
         break;
-
-      case 3: // jump — legs tucked, arms up
-        g.fillRect(ox + 3, 11, 4, 3);  // left leg short
-        g.fillRect(ox + 9, 11, 4, 3);  // right leg short
-        g.fillRect(ox + 0, 3, 3, 5);   // left arm raised
-        g.fillRect(ox + 13, 3, 3, 5);  // right arm raised
+      case 3: // jump — legs tucked, arms raised
+        g.fillRect(ox + 3 * S, 11 * S, 4 * S, 3 * S);
+        g.fillRect(ox + 9 * S, 11 * S, 4 * S, 3 * S);
+        g.fillRect(ox + 0, 3 * S, 3 * S, 5 * S);          // left arm
+        g.fillRect(ox + 13 * S, 3 * S, 3 * S, 5 * S);     // right arm
         break;
     }
   }
@@ -80,16 +84,16 @@ export function generatePlayerSpritesheet(
   g.generateTexture(key, W * 4, H);
   g.destroy();
 
-  // Register named frames for Phaser's animation system
+  // Register named frames
   const tex = scene.textures.get(key);
-  tex.add('idle',   0,       0, 0, W, H);
-  tex.add('walk_a', 0, W,     0, W, H);
-  tex.add('walk_b', 0, W * 2, 0, W, H);
-  tex.add('jump',   0, W * 3, 0, W, H);
+  tex.add('idle',   0,      0, 0, W, H);
+  tex.add('walk_a', 0, W,      0, W, H);
+  tex.add('walk_b', 0, W * 2,  0, W, H);
+  tex.add('jump',   0, W * 3,  0, W, H);
 }
 
 /**
- * Registers the three animation clips (idle, walk, jump) for a color.
+ * Registers the three animation clips for a color.
  * Idempotent — safe to call multiple times.
  */
 export function registerPlayerAnims(
@@ -106,7 +110,6 @@ export function registerPlayerAnims(
       repeat: -1,
     });
   }
-
   if (!scene.anims.exists(`player_walk_${colorIndex}`)) {
     scene.anims.create({
       key: `player_walk_${colorIndex}`,
@@ -118,7 +121,6 @@ export function registerPlayerAnims(
       repeat: -1,
     });
   }
-
   if (!scene.anims.exists(`player_jump_${colorIndex}`)) {
     scene.anims.create({
       key: `player_jump_${colorIndex}`,
@@ -129,11 +131,6 @@ export function registerPlayerAnims(
   }
 }
 
-/**
- * Returns the animation key appropriate for the current movement state.
- * The caller should check `currentAnim.key !== result` before playing
- * to avoid restarting an animation that's already running.
- */
 export function resolveAnimKey(
   colorIndex: number,
   velocityX: number,
@@ -142,4 +139,12 @@ export function resolveAnimKey(
   if (!isGrounded) return `player_jump_${colorIndex}`;
   if (Math.abs(velocityX) > 1) return `player_walk_${colorIndex}`;
   return `player_idle_${colorIndex}`;
+}
+
+/** Darkens a hex color by mixing with black at 50%. */
+function darkenColor(color: number): number {
+  const r = ((color >> 16) & 0xff) >> 1;
+  const g = ((color >> 8) & 0xff) >> 1;
+  const b = (color & 0xff) >> 1;
+  return (r << 16) | (g << 8) | b;
 }

@@ -86,24 +86,21 @@ A hybrid style that combines pixel art charm with colorful cartoon energy.
 
 ### Resolution
 
-**Current: 480×270** — NES/SNES-era pixel art feel, scaled to fill the browser window with `image-rendering: pixelated`. Extremely low level data coordinates but looks sharp at any screen size.
+**Current: 1280×720** — HD base resolution matching most browser viewports. Phaser renders at native 1280×720 and scales to fill the window (`FIT` scale mode). TILE_SIZE=32 (sprites are 32×32 px).
 
-**Can we change it?** Yes, but it requires updating every level file since all platform/spawn coordinates are absolute pixels. The recommended upgrade path:
+Previous versions used 480×270. All level coordinates were multiplied by 8/3 during the upgrade. Physics constants (GRAVITY, JUMP_VELOCITY, MOVE_SPEED) were also multiplied by 8/3 to preserve the same visual jump height proportions.
 
-| Resolution | Factor vs now | Notes |
-|------------|--------------|-------|
-| 480×270    | 1× (current) | Ultra crisp; text can feel tiny |
-| 640×360    | 1.33×        | Best compromise — same aspect ratio, more room, easy upgrade |
-| 960×540    | 2×           | Modern feel; characters look proportionally small |
-| 1280×720   | 2.67×        | Full HD base; requires larger sprites or redesigned levels |
-
-**To upgrade to 640×360**: change `GAME_WIDTH`/`GAME_HEIGHT` in `shared/constants.ts` and multiply every `x`/`y`/`width`/`height` coordinate in `shared/levels/*.ts` by `640/480 = 1.333`. This is a ~2h job but straightforward.
+If you ever need to change resolution again: update `GAME_WIDTH`/`GAME_HEIGHT`/`TILE_SIZE` in `shared/constants.ts` and scale all `x`/`y`/`width`/`height` values in every level file by the new factor. Also scale physics constants by the same factor.
 
 ### Characters and Palette
-- **Sprites**: 16×16 px, generated procedurally via canvas (no image files needed)
+- **Sprites**: 32×32 px at TILE_SIZE=32, generated procedurally via Phaser Graphics API (no image files needed)
 - **Player colors**: P1 Red, P2 Blue, P3 Green, P4 Yellow, P5 Purple, P6 Orange, P7 Pink, P8 Cyan
-- **Tiles**: 16×16 with chunky outlines, generated via Phaser Graphics API
+- **Tiles**: solid rects drawn via Phaser Graphics; no tilemap files
 - **UI**: Press Start 2P font (Google Fonts), pixel-panel aesthetic
+- **Goal object**: animated 5-pointed gold star with spinning tween, pulsing glow circle, and vertical beacon beam
+
+### Why no image or audio files?
+All visuals and sounds are generated at runtime via Web APIs. **Advantages**: zero asset pipeline, instant cold start, no file-hosting issues, no CORS problems on Vercel/Render. **Trade-off**: lower fidelity than hand-crafted art. When the game is more mature and the design is locked, swap `generatePlayerSpritesheet()` for real sprite sheets and `SoundSystem.ts` for actual audio files — the integration points are already isolated. For now, procedural generation lets us iterate fast without managing a binary asset pipeline.
 
 ## Game Mechanics
 
@@ -117,6 +114,8 @@ A hybrid style that combines pixel art charm with colorful cartoon energy.
 2. **Linked doors**: Buttons open corresponding doors (1-to-1 link via `linkedId`)
 3. **Player stacking**: Players can jump on each other's heads to reach higher platforms
 4. **Latching buttons**: One-shot buttons that stay activated once triggered
+5. **Carry**: Standing on another player's head — you move with them horizontally
+6. **Jump blocking**: You cannot jump if another player is standing on your head
 
 ### Cooperative Mechanics (planned)
 5. **Spring/launch pads**: Catapult a player upward
@@ -146,9 +145,9 @@ Client → Server:  input only (left, right, jump, interact, sequence)
 Server → Client:  positions (20Hz), objectStates (on change), playerList (5Hz)
 ```
 
-The server owns all game state. Local player uses Phaser Arcade Physics for
-immediate response (client-side prediction); server positions are authoritative
-and remote players lerp to server positions.
+The server owns all game state. **All players (including the local player) are driven entirely by server position broadcasts** — there is no dual physics simulation. The local player uses Phaser Arcade Physics only for immediate visual feedback; actual positions come from the server's `positions` broadcast. Remote players lerp to server positions over one tick window (50ms).
+
+**Sub-stepping**: The server physics tick runs 3 sub-steps per tick (SUBSTEPS=3) to prevent tunnelling at 20Hz.
 
 ### Actual Message Types (as implemented)
 
@@ -226,7 +225,7 @@ on the client side — they will silently return nothing and the bug will reappe
 - [x] Mobile touch controls (virtual D-pad + jump)
 - [ ] Background parallax layers
 - [ ] Player name tags above sprites in GameScene
-- [ ] Animated goal (spinning star or flag)
+- [x] Animated goal (spinning gold star + glow + beacon beam)
 
 ### Phase 5 — Deployment ✅
 - [x] Vite production build → `client/dist/`
@@ -237,7 +236,38 @@ on the client side — they will silently return nothing and the bug will reappe
 
 ### Phase 6 — Nice to Have
 - [ ] Spectator mode (join as observer, no player sprite)
-- [ ] Persistent leaderboard (fastest room times)
-- [ ] Level editor (visual drag-drop for SolidRect + objects)
+- [ ] Persistent leaderboard (fastest room times per level)
+- [ ] Level editor (visual drag-drop tool for SolidRect + objects → exports JSON)
 - [ ] More cooperative mechanics: springs, carrying, moving platforms
 - [ ] More levels (10+ total)
+
+## Improvement Ideas (game design)
+
+These are ideas for making the game more engaging — not yet scheduled, just documented for reference.
+
+### Feel & polish
+- **Player name tags** floating above each sprite in GameScene (critical for 4+ players)
+- **Jump SFX** per player color; **goal fanfare** when level completes
+- **Parallax background** — 2–3 layers of soft sky/clouds behind the level
+- **Screen shake** on door open and level complete
+- **Transition animation** between levels (wipe or zoom-out) instead of instant load
+- **Particle burst** at the goal when a player touches it
+
+### Cooperative depth
+- **Spring pads**: step on → launch; hold button → launch ally higher
+- **Moving platforms**: linked to a button, slide between two waypoints
+- **Weight bridges**: a platform that tilts based on player distribution
+- **Throw mechanic**: hold Interact next to ally → pick up → release to throw upward
+- **Ghost spectator**: dead/disconnected players watch and can place emoji reactions
+
+### Social / meta
+- **Emoji reactions**: press a key to pop a floating emoji above your character (laugh, gg, etc.)
+- **Post-game scoreboard**: who reached goal first, who held button longest, who fell most
+- **Cosmetic unlocks**: complete all 5 levels → unlock an alternate color palette or hat sprite
+- **Public room list**: joinable rooms shown on the main menu with player counts
+
+### Tech improvements
+- **Client-side prediction rollback**: buffer last N inputs, replay on server correction
+- **Room persistence**: rejoin a room after disconnect within 30 s (Colyseus reconnect token)
+- **Rate limiting**: cap input messages to TICK_RATE per second per client server-side
+- **Structured logging**: add request IDs and room codes to server logs for debugging

@@ -2,16 +2,10 @@ import { LevelData } from '../level';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../constants';
 
 // Level 5 — "Chain"
-// Mechanic: relay of two buttons + latching final switch.
-//
-// Puzzle (2 players):
-//   btn5a is a regular pressure-sensitive button.
-//   btn5b is a LATCHING button — once stepped on it stays permanently activated.
-//
-//   Player A stands on btn5a the entire time (holds door5a open).
-//   Player B passes through door5a and walks to btn5b.
-//   Player B steps on btn5b — it latches permanently, door5b opens for good.
-//   Player B (and/or Player A once released) walks through door5b to reach the goal.
+// btn5a: pressure-sensitive — Player A holds it the whole time.
+// btn5b: latching — once stepped on, stays permanently activated.
+// Player A holds btn5a → door5a opens → Player B crosses → steps btn5b
+// (latches) → door5b opens forever → both can reach the goal.
 
 const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
 const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
@@ -22,47 +16,45 @@ export const LEVEL_5: LevelData = {
 
   solidRects: [
     { x: 0, y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },
-    // Mid platform — gives the level some verticality
-    { x: 240, y: 200, width: 80, height: TILE_SIZE, tileType: 'platform' },
+    // Mid platform — adds verticality, solo-reachable
+    { x: 640, y: 533, width: 213, height: TILE_SIZE, tileType: 'platform' },
   ],
 
   spawnPoints: [
-    { x: 24,  y: PLAYER_ON_FLOOR },
-    { x: 48,  y: PLAYER_ON_FLOOR },
-    { x: 72,  y: PLAYER_ON_FLOOR },
-    { x: 96,  y: PLAYER_ON_FLOOR },
+    { x: 64,  y: PLAYER_ON_FLOOR },
+    { x: 128, y: PLAYER_ON_FLOOR },
+    { x: 192, y: PLAYER_ON_FLOOR },
+    { x: 256, y: PLAYER_ON_FLOOR },
   ],
 
   objects: [
     {
-      // Pressure-sensitive relay button — Player A holds this the whole time
       id: 'btn5a',
       type: 'button',
-      x: 80,
+      x: 213,
       y: PLAYER_ON_FLOOR,
       width: TILE_SIZE,
-      height: 4,
+      height: 8,
       requiredPlayers: 1,
       linkedId: 'door5a',
     },
     {
       id: 'door5a',
       type: 'door',
-      x: 192,
+      x: 512,
       y: Math.round(GAME_HEIGHT / 2),
-      width: 8,
+      width: 16,
       height: GAME_HEIGHT,
       requiredPlayers: 0,
       linkedId: 'btn5a',
     },
     {
-      // Latching switch — once activated it stays on forever
       id: 'btn5b',
       type: 'button',
-      x: 336,
+      x: 896,
       y: PLAYER_ON_FLOOR,
       width: TILE_SIZE,
-      height: 4,
+      height: 8,
       requiredPlayers: 1,
       linkedId: 'door5b',
       latching: true,
@@ -70,9 +62,9 @@ export const LEVEL_5: LevelData = {
     {
       id: 'door5b',
       type: 'door',
-      x: 400,
+      x: 1067,
       y: Math.round(GAME_HEIGHT / 2),
-      width: 8,
+      width: 16,
       height: GAME_HEIGHT,
       requiredPlayers: 0,
       linkedId: 'btn5b',
@@ -80,7 +72,7 @@ export const LEVEL_5: LevelData = {
     {
       id: 'goal5',
       type: 'goal',
-      x: 448,
+      x: 1195,
       y: PLAYER_ON_FLOOR,
       width: TILE_SIZE,
       height: TILE_SIZE,

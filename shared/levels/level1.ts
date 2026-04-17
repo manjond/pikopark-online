@@ -1,72 +1,57 @@
 import { LevelData } from '../level';
 import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../constants';
 
-// Derived layout constants (all in pixels, Phaser y-down coordinate space)
-const FLOOR_TOP = GAME_HEIGHT - TILE_SIZE;           // 254 — top edge of ground tile
-const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 246 — player center on ground
+// Layout at 1280×720 (scaled from 480×270 by ×8/3)
+const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;           // 688
+const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 672
 
 export const LEVEL_1: LevelData = {
   id: 1,
   name: 'Level 1',
 
-  // ─── Solid geometry ─────────────────────────────────────────────────────────
-  // Coordinates: top-left x,y with width×height.
-  // These match the client's original PLATFORMS array exactly:
-  //   Platform 1: col 3–9  → x=48,  top=212  (centerY=220)
-  //   Platform 2: col 14–20 → x=224, top=177  (centerY=185)
-  //   Platform 3: col 23–27 → x=368, top=137  (centerY=145)
   solidRects: [
     { x: 0,   y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },
-    { x: 48,  y: 212,       width: 112,        height: TILE_SIZE, tileType: 'platform' },
-    { x: 224, y: 177,       width: 112,        height: TILE_SIZE, tileType: 'platform' },
-    { x: 368, y: 137,       width: 80,         height: TILE_SIZE, tileType: 'platform' },
+    // Low platform — reachable from ground (solo peak y=421, platform top y=565)
+    { x: 128,  y: 565, width: 299, height: TILE_SIZE, tileType: 'platform' },
+    // Mid platform — reachable from low platform
+    { x: 597,  y: 472, width: 299, height: TILE_SIZE, tileType: 'platform' },
+    // Goal platform — reachable from mid platform only (top y=365 < solo-peak y=421 → unreachable from ground)
+    { x: 981,  y: 365, width: 213, height: TILE_SIZE, tileType: 'platform' },
   ],
 
-  // ─── Spawn points ────────────────────────────────────────────────────────────
-  // Match the server's stagger formula: x = TILE_SIZE/2 + index*(TILE_SIZE+8)
   spawnPoints: [
-    { x: 8,  y: PLAYER_ON_FLOOR },
-    { x: 32, y: PLAYER_ON_FLOOR },
-    { x: 56, y: PLAYER_ON_FLOOR },
-    { x: 80, y: PLAYER_ON_FLOOR },
+    { x: 21,  y: PLAYER_ON_FLOOR },
+    { x: 85,  y: PLAYER_ON_FLOOR },
+    { x: 149, y: PLAYER_ON_FLOOR },
+    { x: 213, y: PLAYER_ON_FLOOR },
   ],
 
-  // ─── Interactive objects ─────────────────────────────────────────────────────
-  //
-  // Puzzle flow:
-  //   Player A stands on btn1 (x=112, ground) → door1 (x=192) opens.
-  //   Player B runs right through the open door, jumps up:
-  //     ground → left-platform (y=220) is blocked by the door, so go RIGHT
-  //     right side: mid-platform (y=185, x=224–336) → high-platform (y=145, x=368–448)
-  //   Player B touches the goal star (x=408) on the high platform → level complete!
   objects: [
     {
       id: 'btn1',
       type: 'button',
-      x: 112,               // ground, between spawn area and door
-      y: PLAYER_ON_FLOOR,   // 246 — detected by x overlap + isGrounded
+      x: 299,
+      y: PLAYER_ON_FLOOR,
       width: TILE_SIZE,
-      height: 4,
+      height: 8,
       requiredPlayers: 1,
       linkedId: 'door1',
     },
     {
       id: 'door1',
       type: 'door',
-      x: 192,               // between left platform (x≤160) and mid platform (x≥224)
-      y: Math.round(GAME_HEIGHT / 2), // 135 — full-height barrier
-      width: 8,
+      x: 512,
+      y: Math.round(GAME_HEIGHT / 2),
+      width: 16,
       height: GAME_HEIGHT,
       requiredPlayers: 0,
       linkedId: 'btn1',
     },
     {
-      // Goal star — on the high platform (col 25, y=145 top → player center y=137)
-      // Reachable only by passing through the door: mid-platform → high-platform → goal
       id: 'goal1',
       type: 'goal',
-      x: 408,               // col 25 center (25*16+8=408), inside high platform
-      y: 137 - TILE_SIZE / 2, // 129 — player center when standing on high platform top (137)
+      x: 1088,
+      y: 365 - TILE_SIZE / 2,  // 349 — player center when standing on goal platform
       width: TILE_SIZE,
       height: TILE_SIZE,
       requiredPlayers: 0,

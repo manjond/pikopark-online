@@ -19,31 +19,21 @@ import {
   LEVEL_5,
 } from '@pikopark/shared';
 
-// Player center Y when standing on the ground tile
-const FLOOR_Y = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 246
+const FLOOR_Y = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // player center when on ground
 
-/** Ordered list of all levels — index 0 = first level. */
+/** Number of physics sub-steps per server tick — reduces tunnelling. */
+const SUBSTEPS = 3;
+
 const LEVELS: LevelData[] = [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5];
 
 export class GameRoom extends Room<GameState> {
   maxClients = MAX_PLAYERS;
 
-  /** Solid rectangles for the active level — used for server-side collision. */
   private solidRects: SolidRect[] = [];
-
-  /** 0-based index into LEVELS[]. */
   private currentLevelIndex = 0;
-
-  /** Prevents broadcasting levelComplete more than once per level. */
   private levelCompleted = false;
-
-  /** Session ID of the first player to join — only they can start the game. */
   private hostId = '';
-
-  /** Previous objectStates activation snapshot — used to detect changes. */
   private prevObjStates = new Map<string, boolean>();
-
-  /** Tick counter — used for periodic lower-frequency broadcasts. */
   private tickCount = 0;
 
   onCreate(_options: Record<string, unknown>): void {
@@ -57,11 +47,8 @@ export class GameRoom extends Room<GameState> {
       handlePlayerInput(this.state, client, message);
     });
 
-    this.onMessage('ready', (_client) => {
-      // TODO: track per-player ready state; start when all are ready
-    });
+    this.onMessage('ready', (_client) => { /* future: per-player ready gate */ });
 
-    // Only the host (first to join) can start the game.
     this.onMessage('startGame', (client) => {
       if (client.sessionId === this.hostId) {
         this.broadcast('gameStart', {});
@@ -100,20 +87,17 @@ export class GameRoom extends Room<GameState> {
     this.state.players.set(client.sessionId, player);
     this.broadcast('playerJoined', { name: player.name, color: player.color });
 
-    // First player to join becomes host.
     if (this.hostId === '') this.hostId = client.sessionId;
 
-    // Send room code directly to this client.
     client.send('roomCode', { code: this.state.roomCode });
 
-    // Send current object states so the new client can sync immediately.
+    // Send current object states to the new joiner immediately
     const objStates: Array<{ id: string; activated: boolean }> = [];
     this.state.interactiveObjects.forEach((obj) => {
       objStates.push({ id: obj.id, activated: obj.activated });
     });
     if (objStates.length > 0) client.send('objectStates', objStates);
 
-    // Broadcast updated player list to everyone.
     this.broadcastPlayerList();
   }
 
@@ -123,21 +107,14 @@ export class GameRoom extends Room<GameState> {
       this.broadcast('playerLeft', { name: player.name });
       this.state.players.delete(client.sessionId);
     }
-
-    // If the host left, assign the next player as host.
     if (client.sessionId === this.hostId) {
       this.hostId = '';
-      this.state.players.forEach((p) => {
-        if (!this.hostId) this.hostId = p.id;
-      });
+      this.state.players.forEach((p) => { if (!this.hostId) this.hostId = p.id; });
     }
-
     this.broadcastPlayerList();
   }
 
-  onDispose(): void {
-    // nothing to clean up
-  }
+  onDispose(): void { /* nothing */ }
 
   // ─── Level loading ────────────────────────────────────────────────────────────
 
@@ -148,7 +125,6 @@ export class GameRoom extends Room<GameState> {
     this.levelCompleted = false;
     this.state.currentLevel = levelData.id;
 
-    // Clear and repopulate interactive objects
     this.state.interactiveObjects.clear();
     this.prevObjStates.clear();
     for (const def of levelData.objects) {
@@ -167,7 +143,6 @@ export class GameRoom extends Room<GameState> {
       this.prevObjStates.set(def.id, false);
     }
 
-    // Respawn all existing players at the new level's spawn points
     let spawnIndex = 0;
     this.state.players.forEach((player) => {
       const spawn = levelData.spawnPoints[spawnIndex] ?? {
@@ -183,9 +158,7 @@ export class GameRoom extends Room<GameState> {
     });
 
     if (levelIndex > 0) {
-      // Notify clients to rebuild their tile geometry and objects for this level.
       this.broadcast('levelStart', { levelId: levelData.id });
-      // Send initial object states (all deactivated) for new level.
       const objStates: Array<{ id: string; activated: boolean }> = [];
       this.state.interactiveObjects.forEach((obj) => {
         objStates.push({ id: obj.id, activated: obj.activated });
@@ -194,214 +167,213 @@ export class GameRoom extends Room<GameState> {
     }
   }
 
-  // ─── Server-side physics tick ─────────────────────────────────────────────────
+  // ─── Physics tick ─────────────────────────────────────────────────────────────
 
   private tick(deltaTime: number): void {
     const dt = deltaTime / 1000;
     this.tickCount++;
 
-    // ── 0. Broadcast player list every 5 ticks (250 ms) ────────────────────────
-    // This ensures late-subscribing clients (LobbyScene registers listener after
-    // the first onJoin broadcast fires) always receive an up-to-date roster.
-    if (this.tickCount % 5 === 0) {
-      this.broadcastPlayerList();
-    }
+    // Broadcast player list at 5 Hz — catches late-subscribing lobby clients
+    if (this.tickCount % 4 === 0) this.broadcastPlayerList();
 
-    // ── 1. Snapshot Y positions before integration (for one-way checks) ────────
-    const prevY = new Map<string, number>();
-    this.state.players.forEach((p, id) => prevY.set(id, p.y));
-
-    // ── 1. Reset pressure-sensitive buttons; latching buttons keep their state ──
+    // ── Reset pressure-sensitive buttons each tick ─────────────────────────────
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type === 'button' && !obj.latching) obj.activated = false;
     });
 
-    // ── 2. Integrate physics + resolve static geometry collisions ──────────────
-    this.state.players.forEach((player, id) => {
-      const py = prevY.get(id) ?? player.y;
+    // ── Physics with sub-steps to prevent tunnelling ───────────────────────────
+    const subDt = dt / SUBSTEPS;
 
-      // Gravity — accumulate while airborne
-      if (!player.isGrounded) {
-        player.velocityY += GRAVITY * dt;
-      }
+    for (let sub = 0; sub < SUBSTEPS; sub++) {
+      // Save Y before this sub-step for one-way checks
+      const prevY = new Map<string, number>();
+      this.state.players.forEach((p, id) => prevY.set(id, p.y));
 
-      // Integrate velocity
-      player.x += player.velocityX * dt;
-      player.y += player.velocityY * dt;
+      // ── Integrate & collide each player ──────────────────────────────────────
+      this.state.players.forEach((player, id) => {
+        const py = prevY.get(id) ?? player.y;
 
-      // Horizontal world bounds
-      player.x = Math.max(TILE_SIZE / 2, Math.min(GAME_WIDTH - TILE_SIZE / 2, player.x));
+        if (!player.isGrounded) {
+          player.velocityY += GRAVITY * subDt;
+        }
 
-      player.isGrounded = false;
+        player.x += player.velocityX * subDt;
+        player.y += player.velocityY * subDt;
 
-      const pLeft = player.x - TILE_SIZE / 2;
-      const pRight = player.x + TILE_SIZE / 2;
-      const prevBottom = py + TILE_SIZE / 2;
-      const currBottom = player.y + TILE_SIZE / 2;
+        player.x = Math.max(TILE_SIZE / 2, Math.min(GAME_WIDTH - TILE_SIZE / 2, player.x));
+        player.isGrounded = false;
 
-      // ── One-way platform collision (land from above only) ───────────────────
-      for (const rect of this.solidRects) {
-        if (rect.tileType === 'ground') continue;
+        const pLeft   = player.x - TILE_SIZE / 2;
+        const pRight  = player.x + TILE_SIZE / 2;
+        const prevBottom = py + TILE_SIZE / 2;
+        const currBottom = player.y + TILE_SIZE / 2;
 
-        if (
-          player.velocityY >= 0 &&
-          pRight > rect.x &&
-          pLeft < rect.x + rect.width &&
-          currBottom >= rect.y &&
-          prevBottom <= rect.y
-        ) {
-          player.y = rect.y - TILE_SIZE / 2;
+        // One-way platform (land from above only)
+        for (const rect of this.solidRects) {
+          if (rect.tileType === 'ground') continue;
+          if (
+            player.velocityY >= 0 &&
+            pRight > rect.x &&
+            pLeft < rect.x + rect.width &&
+            currBottom >= rect.y &&
+            prevBottom <= rect.y + TILE_SIZE * 0.5   // tolerance: half-tile handles tunnelling
+          ) {
+            player.y = rect.y - TILE_SIZE / 2;
+            player.velocityY = 0;
+            player.isGrounded = true;
+            break;
+          }
+        }
+
+        // Ground (always resolves)
+        if (player.y >= FLOOR_Y) {
+          player.y = FLOOR_Y;
           player.velocityY = 0;
           player.isGrounded = true;
-          break;
         }
-      }
 
-      // ── Ground collision (always resolves against the bottom ground tile) ────
-      if (player.y >= FLOOR_Y) {
-        player.y = FLOOR_Y;
-        player.velocityY = 0;
-        player.isGrounded = true;
-      }
-
-      // ── Door collision (solid AABB when door is closed) ─────────────────────
-      this.state.interactiveObjects.forEach((obj) => {
-        if (obj.type !== 'door' || obj.activated) return;
-
-        const pL = player.x - TILE_SIZE / 2;
-        const pR = player.x + TILE_SIZE / 2;
-        const pT = player.y - TILE_SIZE / 2;
-        const pB = player.y + TILE_SIZE / 2;
-        const dL = obj.x - obj.width / 2;
-        const dR = obj.x + obj.width / 2;
-        const dT = obj.y - obj.height / 2;
-        const dB = obj.y + obj.height / 2;
-
-        if (pR > dL && pL < dR && pB > dT && pT < dB) {
-          const overlapLeft = pR - dL;
-          const overlapRight = dR - pL;
-          if (overlapLeft <= overlapRight) {
-            player.x = dL - TILE_SIZE / 2;
-          } else {
-            player.x = dR + TILE_SIZE / 2;
+        // Door collision (solid AABB when closed)
+        this.state.interactiveObjects.forEach((obj) => {
+          if (obj.type !== 'door' || obj.activated) return;
+          const pL = player.x - TILE_SIZE / 2;
+          const pR = player.x + TILE_SIZE / 2;
+          const pT = player.y - TILE_SIZE / 2;
+          const pB = player.y + TILE_SIZE / 2;
+          const dL = obj.x - obj.width / 2;
+          const dR = obj.x + obj.width / 2;
+          const dT = obj.y - obj.height / 2;
+          const dB = obj.y + obj.height / 2;
+          if (pR > dL && pL < dR && pB > dT && pT < dB) {
+            if (pR - dL <= dR - pL) { player.x = dL - TILE_SIZE / 2; }
+            else                    { player.x = dR + TILE_SIZE / 2; }
+            player.velocityX = 0;
           }
-          player.velocityX = 0;
-        }
+        });
       });
-    });
 
-    // ── 3. Player stacking — one player can land on another's head ─────────────
-    const players: Array<[string, PlayerState]> = [];
-    this.state.players.forEach((p, id) => players.push([id, p]));
+      // ── Player stacking — land on another player's head ───────────────────────
+      const players: Array<[string, PlayerState]> = [];
+      this.state.players.forEach((p, id) => players.push([id, p]));
 
-    for (let i = 0; i < players.length; i++) {
-      const [idA, pA] = players[i];
-      const pyA = prevY.get(idA) ?? pA.y;
-      const prevABottom = pyA + TILE_SIZE / 2;
-      const currABottom = pA.y + TILE_SIZE / 2;
+      for (let i = 0; i < players.length; i++) {
+        const [idA, pA] = players[i];
+        const pyA = prevY.get(idA) ?? pA.y;
+        const prevABottom = pyA + TILE_SIZE / 2;
+        const currABottom = pA.y + TILE_SIZE / 2;
 
-      for (let j = 0; j < players.length; j++) {
-        if (i === j) continue;
-        const [, pB] = players[j];
+        for (let j = 0; j < players.length; j++) {
+          if (i === j) continue;
+          const [, pB] = players[j];
+          const bTop   = pB.y - TILE_SIZE / 2;
+          const aLeft  = pA.x - TILE_SIZE / 2;
+          const aRight = pA.x + TILE_SIZE / 2;
+          const bLeft  = pB.x - TILE_SIZE / 2;
+          const bRight = pB.x + TILE_SIZE / 2;
+          const horizOverlap = aRight > bLeft && aLeft < bRight;
+          if (
+            pA.velocityY >= 0 &&
+            horizOverlap &&
+            currABottom >= bTop &&
+            prevABottom <= bTop + TILE_SIZE * 0.5   // tolerance matches one-way
+          ) {
+            pA.y = bTop - TILE_SIZE / 2;
+            pA.velocityY = 0;
+            pA.isGrounded = true;
+            break;
+          }
+        }
+      }
+    }
 
-        const bTop = pB.y - TILE_SIZE / 2;
-        const aLeft = pA.x - TILE_SIZE / 2;
-        const aRight = pA.x + TILE_SIZE / 2;
-        const bLeft = pB.x - TILE_SIZE / 2;
-        const bRight = pB.x + TILE_SIZE / 2;
+    // ── Carry: if A is standing on B, propagate B's horizontal movement ────────
+    const allPlayers: Array<PlayerState> = [];
+    this.state.players.forEach((p) => allPlayers.push(p));
 
-        const horizOverlap = aRight > bLeft && aLeft < bRight;
-
-        if (
-          pA.velocityY >= 0 &&   // A falling downward
-          horizOverlap &&
-          currABottom >= bTop && // A's feet now at or below B's head
-          prevABottom <= bTop    // A's feet were above B's head last tick
-        ) {
-          pA.y = bTop - TILE_SIZE / 2;  // snap A on top of B
-          pA.velocityY = 0;
-          pA.isGrounded = true;
+    for (const pA of allPlayers) {
+      const aFeet = pA.y + TILE_SIZE / 2;
+      for (const pB of allPlayers) {
+        if (pA === pB) continue;
+        const bHead = pB.y - TILE_SIZE / 2;
+        const horizOverlap = Math.abs(pA.x - pB.x) < TILE_SIZE * 0.9;
+        if (horizOverlap && Math.abs(aFeet - bHead) < TILE_SIZE * 0.25) {
+          // A is standing on B — carry with B's velocity
+          pA.x += pB.velocityX * (dt / 1); // use full dt (carry runs once, not per substep)
+          pA.x = Math.max(TILE_SIZE / 2, Math.min(GAME_WIDTH - TILE_SIZE / 2, pA.x));
           break;
         }
       }
     }
 
-    // ── 4. Button trigger — count players on each button, compare requiredPlayers
+    // ── Block jump if another player is standing on top ────────────────────────
+    // (handled in handlePlayerInput — see PlayerCommands.ts)
+
+    // ── Button trigger ────────────────────────────────────────────────────────
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type !== 'button') return;
-      if (obj.latching && obj.activated) return; // already latched, skip
+      if (obj.latching && obj.activated) return;
 
-      const bLeft = obj.x - obj.width / 2;
-      const bRight = obj.x + obj.width / 2;
+      const bLeft   = obj.x - obj.width / 2;
+      const bRight  = obj.x + obj.width / 2;
+      const btnTop  = obj.y - obj.height / 2;   // top surface of the button
+
       let count = 0;
       this.state.players.forEach((player) => {
-        const pLeft = player.x - TILE_SIZE / 2;
+        const pLeft  = player.x - TILE_SIZE / 2;
         const pRight = player.x + TILE_SIZE / 2;
-        if (player.isGrounded && pRight > bLeft && pLeft < bRight) count++;
+        const pFeet  = player.y + TILE_SIZE / 2; // bottom of player
+
+        // Must be grounded, horizontally overlapping, AND standing at the button's level
+        const onButtonLevel = Math.abs(pFeet - btnTop) < TILE_SIZE * 0.75;
+        if (player.isGrounded && onButtonLevel && pRight > bLeft && pLeft < bRight) {
+          count++;
+        }
       });
 
       const needed = obj.requiredPlayers > 0 ? obj.requiredPlayers : 1;
       if (count >= needed) obj.activated = true;
     });
 
-    // ── 5. Propagate button → linked door ─────────────────────────────────────
+    // ── Propagate button → linked door ─────────────────────────────────────────
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type !== 'button' || !obj.linkedId) return;
       const door = this.state.interactiveObjects.get(obj.linkedId);
       if (door) door.activated = obj.activated;
     });
 
-    // ── 6. Goal detection — broadcast once when any player touches the goal ────
+    // ── Goal detection ─────────────────────────────────────────────────────────
     if (!this.levelCompleted) {
       this.state.players.forEach((player) => {
         if (this.levelCompleted) return;
-
-        const pLeft  = player.x - TILE_SIZE / 2;
-        const pRight = player.x + TILE_SIZE / 2;
-        const pTop   = player.y - TILE_SIZE / 2;
+        const pLeft   = player.x - TILE_SIZE / 2;
+        const pRight  = player.x + TILE_SIZE / 2;
+        const pTop    = player.y - TILE_SIZE / 2;
         const pBottom = player.y + TILE_SIZE / 2;
-
         this.state.interactiveObjects.forEach((obj) => {
           if (obj.type !== 'goal' || this.levelCompleted) return;
-
-          const gLeft   = obj.x - obj.width / 2;
-          const gRight  = obj.x + obj.width / 2;
-          const gTop    = obj.y - obj.height / 2;
-          const gBottom = obj.y + obj.height / 2;
-
-          if (pRight > gLeft && pLeft < gRight && pBottom > gTop && pTop < gBottom) {
+          const gLeft  = obj.x - obj.width  / 2;
+          const gRight = obj.x + obj.width  / 2;
+          const gTop   = obj.y - obj.height / 2;
+          const gBot   = obj.y + obj.height / 2;
+          if (pRight > gLeft && pLeft < gRight && pBottom > gTop && pTop < gBot) {
             this.levelCompleted = true;
             this.broadcast('levelComplete', { playerName: player.name });
-
-            // Transition to the next level after 5 seconds (if one exists)
             const nextIndex = this.currentLevelIndex + 1;
             if (nextIndex < LEVELS.length) {
-              this.clock.setTimeout(() => {
-                this.loadLevel(nextIndex);
-              }, 5000);
+              this.clock.setTimeout(() => { this.loadLevel(nextIndex); }, 5000);
             }
           }
         });
       });
     }
 
-    // ── 7. Broadcast player positions every tick ────────────────────────────────
-    const playerPositions: Array<{ id: string; x: number; y: number; vx: number; grounded: boolean; anim: string }> = [];
+    // ── Broadcast positions every tick ─────────────────────────────────────────
+    const positions: Array<{ id: string; x: number; y: number; vx: number; grounded: boolean; anim: string }> = [];
     this.state.players.forEach((p) => {
-      playerPositions.push({
-        id: p.id,
-        x: p.x,
-        y: p.y,
-        vx: p.velocityX,
-        grounded: p.isGrounded,
-        anim: p.animation,
-      });
+      positions.push({ id: p.id, x: p.x, y: p.y, vx: p.velocityX, grounded: p.isGrounded, anim: p.animation });
     });
-    if (playerPositions.length > 0) {
-      this.broadcast('positions', playerPositions);
-    }
+    if (positions.length > 0) this.broadcast('positions', positions);
 
-    // ── 8. Broadcast object states only when something changed ──────────────────
+    // ── Broadcast object states only when changed ───────────────────────────────
     let objChanged = false;
     this.state.interactiveObjects.forEach((obj) => {
       if (this.prevObjStates.get(obj.id) !== obj.activated) {
@@ -411,29 +383,21 @@ export class GameRoom extends Room<GameState> {
     });
     if (objChanged) {
       const objStates: Array<{ id: string; activated: boolean }> = [];
-      this.state.interactiveObjects.forEach((obj) => {
-        objStates.push({ id: obj.id, activated: obj.activated });
-      });
+      this.state.interactiveObjects.forEach((obj) => objStates.push({ id: obj.id, activated: obj.activated }));
       this.broadcast('objectStates', objStates);
     }
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-  /** Broadcast the current player roster and host to all clients. */
   private broadcastPlayerList(): void {
     const players: Array<{ id: string; name: string; color: number }> = [];
-    this.state.players.forEach((p) => {
-      players.push({ id: p.id, name: p.name, color: p.color });
-    });
+    this.state.players.forEach((p) => players.push({ id: p.id, name: p.name, color: p.color }));
     this.broadcast('playerList', { players, hostId: this.hostId });
   }
 
   private generateRoomCode(): string {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    return Array.from(
-      { length: 4 },
-      () => chars[Math.floor(Math.random() * chars.length)],
-    ).join('');
+    return Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join('');
   }
 }

@@ -5,15 +5,17 @@ import { playButtonPress, playDoorOpen } from '../utils/SoundSystem';
 const BUTTON_INACTIVE = 0xffff00;  // yellow — waiting for player
 const BUTTON_ACTIVE   = 0x00ff88;  // green  — pressed
 const DOOR_COLOR      = 0xcc3333;  // red    — closed barrier
-const GOAL_COLOR      = 0xffd700;  // gold   — level exit star
 
 export class InteractiveObject {
   private readonly scene: Phaser.Scene;
   private readonly rect: Phaser.GameObjects.Rectangle;
   readonly type: string;
 
-  /** "GOAL" label rendered above the goal rectangle. */
+  /** Goal visual components */
   private goalLabel: Phaser.GameObjects.Text | null = null;
+  private goalStar: Phaser.GameObjects.Sprite | null = null;
+  private goalGlow: Phaser.GameObjects.Arc | null = null;
+  private goalBeam: Phaser.GameObjects.Rectangle | null = null;
 
   /** Physics image used for local player collision (doors only). */
   private doorImg: Phaser.Physics.Arcade.Image | null = null;
@@ -31,20 +33,82 @@ export class InteractiveObject {
       this.rect.setDepth(2);
 
     } else if (data.type === 'goal') {
-      // Gold pulsing star — rendered larger than its collision box for visibility
-      this.rect = scene.add.rectangle(data.x, data.y, 24, 24, GOAL_COLOR);
-      this.rect.setDepth(2);
-      // "GOAL" label floats above the rectangle
-      this.goalLabel = scene.add.text(data.x, data.y - 17, 'GOAL', {
+      // Invisible placeholder rect to satisfy the readonly field requirement
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, 0, 0);
+
+      // ── Beacon beam — vertical strip rising from goal to top of screen ──────
+      const beamHeight = data.y;
+      this.goalBeam = scene.add.rectangle(
+        data.x, data.y / 2,
+        6, beamHeight,
+        0xffd700, 0.18,
+      );
+      this.goalBeam.setDepth(1);
+      scene.tweens.add({
+        targets: this.goalBeam,
+        alpha: { from: 0.06, to: 0.28 },
+        duration: 900,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // ── Glow circle behind the star ─────────────────────────────────────────
+      this.goalGlow = scene.add.circle(data.x, data.y, 22, 0xffd700, 0.3);
+      this.goalGlow.setDepth(1);
+      scene.tweens.add({
+        targets: this.goalGlow,
+        alpha: { from: 0.12, to: 0.48 },
+        scaleX: { from: 0.8, to: 1.2 },
+        scaleY: { from: 0.8, to: 1.2 },
+        duration: 700,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // ── 5-pointed gold star texture (generated once per scene lifetime) ─────
+      const starKey = 'goal_star';
+      if (!scene.textures.exists(starKey)) {
+        const g = scene.add.graphics();
+        const outerR = 13;
+        const innerR  = 5;
+        const cx = 16;
+        const cy = 16;
+        const pts: { x: number; y: number }[] = [];
+        for (let i = 0; i < 10; i++) {
+          const angle = (i * Math.PI) / 5 - Math.PI / 2;
+          const r = i % 2 === 0 ? outerR : innerR;
+          pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
+        }
+        g.fillStyle(0xffd700, 1);
+        g.fillPoints(pts, true);
+        g.lineStyle(1.5, 0xffffff, 0.7);
+        g.strokePoints(pts, true);
+        g.generateTexture(starKey, 32, 32);
+        g.destroy();
+      }
+
+      this.goalStar = scene.add.sprite(data.x, data.y, starKey);
+      this.goalStar.setDepth(3);
+      scene.tweens.add({
+        targets: this.goalStar,
+        angle: 360,
+        duration: 2400,
+        repeat: -1,
+        ease: 'Linear',
+      });
+
+      // ── "GOAL" floating label ───────────────────────────────────────────────
+      this.goalLabel = scene.add.text(data.x, data.y - 26, 'GOAL', {
         fontFamily: '"Press Start 2P"',
         fontSize: '5px',
         color: '#ffd700',
-      }).setOrigin(0.5, 0.5).setDepth(3);
-      // Pulse both rect and label together
+      }).setOrigin(0.5, 0.5).setDepth(4);
       scene.tweens.add({
-        targets: [this.rect, this.goalLabel],
+        targets: this.goalLabel,
         alpha: { from: 0.55, to: 1 },
-        duration: 550,
+        duration: 600,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
@@ -80,15 +144,19 @@ export class InteractiveObject {
         this.doorImg.body.enable = !data.activated;
       }
     }
-    // goal has no sync state — always visible and pulsing
+    // goal has no sync state — always visible and spinning
     this.prevActivated = data.activated;
   }
 
   destroy(): void {
     this.scene.tweens.killTweensOf(this.rect);
-    if (this.goalLabel) this.scene.tweens.killTweensOf(this.goalLabel);
     this.rect.destroy();
-    this.goalLabel?.destroy();
+
+    if (this.goalStar) { this.scene.tweens.killTweensOf(this.goalStar); this.goalStar.destroy(); }
+    if (this.goalGlow) { this.scene.tweens.killTweensOf(this.goalGlow); this.goalGlow.destroy(); }
+    if (this.goalBeam) { this.scene.tweens.killTweensOf(this.goalBeam); this.goalBeam.destroy(); }
+    if (this.goalLabel) { this.scene.tweens.killTweensOf(this.goalLabel); this.goalLabel.destroy(); }
+
     this.doorImg?.destroy();
   }
 }
