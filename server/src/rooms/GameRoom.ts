@@ -208,19 +208,35 @@ export class GameRoom extends Room<GameState> {
         const prevBottom = py + TILE_SIZE / 2;
         const currBottom = player.y + TILE_SIZE / 2;
 
-        // One-way platform (land from above only)
+        const currHead = player.y - TILE_SIZE / 2;
+        const prevHead = py  - TILE_SIZE / 2;
+
         for (const rect of this.solidRects) {
           if (rect.tileType === 'ground') continue;
+          const horizOverlap = pRight > rect.x && pLeft < rect.x + rect.width;
+          if (!horizOverlap) continue;
+
+          // Land from above
           if (
             player.velocityY >= 0 &&
-            pRight > rect.x &&
-            pLeft < rect.x + rect.width &&
             currBottom >= rect.y &&
-            prevBottom <= rect.y + TILE_SIZE * 0.5   // tolerance: half-tile handles tunnelling
+            prevBottom <= rect.y + TILE_SIZE * 0.5
           ) {
             player.y = rect.y - TILE_SIZE / 2;
             player.velocityY = 0;
             player.isGrounded = true;
+            break;
+          }
+
+          // Ceiling bump — jumping into underside of platform
+          const ceilFace = rect.y + rect.height;
+          if (
+            player.velocityY < 0 &&
+            currHead <= ceilFace &&
+            prevHead >= ceilFace - TILE_SIZE * 0.5
+          ) {
+            player.y = ceilFace + TILE_SIZE / 2;
+            player.velocityY = 0;
             break;
           }
         }

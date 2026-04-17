@@ -30,51 +30,51 @@ export class MenuScene extends Phaser.Scene {
     this.mode = 'main';
     this.typedCode = '';
 
-    const cx = this.cameras.main.width / 2;
+    const cx = this.cameras.main.width  / 2;
     const cy = this.cameras.main.height / 2;
 
     // ── Main group ──────────────────────────────────────────────────────────
-    const title = this.add.text(cx, cy - 80, 'PIKOPARK\nONLINE', {
-      ...FONT, fontSize: '12px', color: '#ffffff', align: 'center',
-      lineSpacing: 6,
+    const title = this.add.text(cx, cy - 180, 'PIKOPARK\nONLINE', {
+      ...FONT, fontSize: '36px', color: '#ffffff', align: 'center',
+      lineSpacing: 16,
     }).setOrigin(0.5);
 
     const createRoom = this.makeButton(cx, cy - 20, 'CREATE ROOM', '#00ff88', () => {
       this.startConnecting('create').catch(console.error);
     });
 
-    const joinRoom = this.makeButton(cx, cy + 4, 'JOIN ROOM', '#00ccff', () => {
+    const joinRoom = this.makeButton(cx, cy + 60, 'JOIN ROOM', '#00ccff', () => {
       this.showJoin();
     });
 
-    const quickPlay = this.makeButton(cx, cy + 28, 'QUICK PLAY', '#ffff00', () => {
+    const quickPlay = this.makeButton(cx, cy + 140, 'QUICK PLAY', '#ffff00', () => {
       this.startConnecting('quickplay').catch(console.error);
     });
 
-    const hint = this.add.text(cx, cy + 44, 'quick play joins any open room', {
-      ...FONT, fontSize: '5px', color: '#444444',
+    const hint = this.add.text(cx, cy + 188, 'quick play joins any open room', {
+      ...FONT, fontSize: '10px', color: '#444444',
     }).setOrigin(0.5);
 
     this.mainGroup = this.add.group([title, createRoom, joinRoom, quickPlay, hint]);
 
     // ── Join-by-code group ──────────────────────────────────────────────────
-    const joinTitle = this.add.text(cx, cy - 60, 'ENTER CODE', {
-      ...FONT, fontSize: '8px', color: '#aaaaaa',
+    const joinTitle = this.add.text(cx, cy - 140, 'ENTER CODE', {
+      ...FONT, fontSize: '20px', color: '#aaaaaa',
     }).setOrigin(0.5);
 
-    this.codeDisplay = this.add.text(cx, cy - 28, 'CODE: _ _ _ _', {
-      ...FONT, fontSize: '10px', color: '#ffffff',
+    this.codeDisplay = this.add.text(cx, cy - 40, 'CODE: _ _ _ _', {
+      ...FONT, fontSize: '26px', color: '#ffffff',
     }).setOrigin(0.5);
 
-    this.joinBtn = this.makeButton(cx, cy + 10, 'JOIN', '#555555', () => {
+    this.joinBtn = this.makeButton(cx, cy + 60, 'JOIN', '#555555', () => {
       if (this.typedCode.length === 4) this.startConnecting('join').catch(console.error);
     });
 
-    this.errorText = this.add.text(cx, cy + 36, '', {
-      ...FONT, fontSize: '6px', color: '#ff4444',
+    this.errorText = this.add.text(cx, cy + 130, '', {
+      ...FONT, fontSize: '12px', color: '#ff4444',
     }).setOrigin(0.5);
 
-    const cancelBtn = this.makeButton(cx, cy + 56, 'CANCEL', '#444444', () => {
+    const cancelBtn = this.makeButton(cx, cy + 190, 'CANCEL', '#444444', () => {
       this.showMain();
     });
 
@@ -83,7 +83,7 @@ export class MenuScene extends Phaser.Scene {
 
     // ── Connecting group ────────────────────────────────────────────────────
     this.connectingText = this.add.text(cx, cy, 'Connecting...', {
-      ...FONT, fontSize: '8px', color: '#ffff00',
+      ...FONT, fontSize: '20px', color: '#ffff00',
     }).setOrigin(0.5);
 
     this.connectingGroup = this.add.group([this.connectingText]);
@@ -138,7 +138,7 @@ export class MenuScene extends Phaser.Scene {
         if (!roomId) {
           const failedCode = this.typedCode;
           this.showJoin();
-          this.typedCode = failedCode;   // restore so user can see / edit what they typed
+          this.typedCode = failedCode;
           this.updateCodeDisplay();
           this.errorText.setText(`"${failedCode}" not found`);
           return;
@@ -182,7 +182,7 @@ export class MenuScene extends Phaser.Scene {
     onClick: () => void,
   ): Phaser.GameObjects.Text {
     const btn = this.add.text(x, y, label, {
-      ...FONT, fontSize: '8px', color,
+      ...FONT, fontSize: '20px', color,
     }).setOrigin(0.5).setInteractive({ useHandCursor: true });
 
     btn.on('pointerover', () => btn.setColor('#ffffff'));

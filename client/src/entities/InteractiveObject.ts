@@ -15,7 +15,6 @@ export class InteractiveObject {
   private goalLabel: Phaser.GameObjects.Text | null = null;
   private goalStar: Phaser.GameObjects.Sprite | null = null;
   private goalGlow: Phaser.GameObjects.Arc | null = null;
-  private goalBeam: Phaser.GameObjects.Rectangle | null = null;
 
   /** Physics image used for local player collision (doors only). */
   private doorImg: Phaser.Physics.Arcade.Image | null = null;
@@ -35,23 +34,6 @@ export class InteractiveObject {
     } else if (data.type === 'goal') {
       // Invisible placeholder rect to satisfy the readonly field requirement
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, 0, 0);
-
-      // ── Beacon beam — vertical strip rising from goal to top of screen ──────
-      const beamHeight = data.y;
-      this.goalBeam = scene.add.rectangle(
-        data.x, data.y / 2,
-        6, beamHeight,
-        0xffd700, 0.18,
-      );
-      this.goalBeam.setDepth(1);
-      scene.tweens.add({
-        targets: this.goalBeam,
-        alpha: { from: 0.06, to: 0.28 },
-        duration: 900,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
 
       // ── Glow circle behind the star ─────────────────────────────────────────
       this.goalGlow = scene.add.circle(data.x, data.y, 22, 0xffd700, 0.3);
@@ -152,9 +134,8 @@ export class InteractiveObject {
     this.scene.tweens.killTweensOf(this.rect);
     this.rect.destroy();
 
-    if (this.goalStar) { this.scene.tweens.killTweensOf(this.goalStar); this.goalStar.destroy(); }
-    if (this.goalGlow) { this.scene.tweens.killTweensOf(this.goalGlow); this.goalGlow.destroy(); }
-    if (this.goalBeam) { this.scene.tweens.killTweensOf(this.goalBeam); this.goalBeam.destroy(); }
+    if (this.goalStar)  { this.scene.tweens.killTweensOf(this.goalStar);  this.goalStar.destroy(); }
+    if (this.goalGlow)  { this.scene.tweens.killTweensOf(this.goalGlow);  this.goalGlow.destroy(); }
     if (this.goalLabel) { this.scene.tweens.killTweensOf(this.goalLabel); this.goalLabel.destroy(); }
 
     this.doorImg?.destroy();
