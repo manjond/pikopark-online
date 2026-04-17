@@ -14,16 +14,6 @@ import { LEVEL_12 } from './levels/level12';
 import { LEVEL_13 } from './levels/level13';
 import { LEVEL_14 } from './levels/level14';
 import { LEVEL_15 } from './levels/level15';
-import { LEVEL_16 } from './levels/level16';
-import { LEVEL_17 } from './levels/level17';
-import { LEVEL_18 } from './levels/level18';
-import { LEVEL_19 } from './levels/level19';
-import { LEVEL_20 } from './levels/level20';
-import { LEVEL_21 } from './levels/level21';
-import { LEVEL_22 } from './levels/level22';
-import { LEVEL_23 } from './levels/level23';
-import { LEVEL_24 } from './levels/level24';
-import { LEVEL_25 } from './levels/level25';
 
 export const PACK_BASICS: LevelPack = {
   id: 'basics',
@@ -46,24 +36,4 @@ export const PACK_SQUAD: LevelPack = {
   levels: [LEVEL_11, LEVEL_12, LEVEL_13, LEVEL_14, LEVEL_15],
 };
 
-export const PACK_HAZARDS: LevelPack = {
-  id: 'hazards',
-  name: 'Hazards',
-  minPlayers: 2,
-  levels: [LEVEL_16, LEVEL_17, LEVEL_18, LEVEL_19, LEVEL_20],
-};
-
-export const PACK_EXTREME: LevelPack = {
-  id: 'extreme',
-  name: 'Extreme',
-  minPlayers: 2,
-  levels: [LEVEL_21, LEVEL_22, LEVEL_23, LEVEL_24, LEVEL_25],
-};
-
-export const ALL_PACKS: LevelPack[] = [
-  PACK_BASICS,
-  PACK_DUO,
-  PACK_SQUAD,
-  PACK_HAZARDS,
-  PACK_EXTREME,
-];
+export const ALL_PACKS: LevelPack[] = [PACK_BASICS, PACK_DUO, PACK_SQUAD];
