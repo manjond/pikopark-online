@@ -3,7 +3,7 @@ import { PlayerState } from './Player';
 
 export class ObjectState extends Schema {
   @type('string') id: string = '';
-  /** 'button' | 'door' */
+  /** 'button' | 'door' | 'goal' | 'trap' | 'spring' */
   @type('string') type: string = 'button';
   @type('number') x: number = 0;
   @type('number') y: number = 0;
@@ -14,6 +14,12 @@ export class ObjectState extends Schema {
   @type('string') linkedId: string = '';
   /** When true the button stays activated after the first trigger instead of resetting each tick. */
   @type('boolean') latching: boolean = false;
+
+  /**
+   * Spring launch velocity (px/s, negative=upward). Server-only; not synced
+   * to clients — bounces are announced via the 'springBounce' broadcast.
+   */
+  power: number = 0;
 }
 
 export class GameState extends Schema {

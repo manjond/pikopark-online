@@ -24,6 +24,9 @@ import { LEVEL_22 } from './levels/level22';
 import { LEVEL_23 } from './levels/level23';
 import { LEVEL_24 } from './levels/level24';
 import { LEVEL_25 } from './levels/level25';
+import { LEVEL_26 } from './levels/level26';
+import { LEVEL_27 } from './levels/level27';
+import { LEVEL_28 } from './levels/level28';
 
 export const PACK_BASICS: LevelPack = {
   id: 'basics',
@@ -60,10 +63,18 @@ export const PACK_SQUAD: LevelPack = {
   levels: [LEVEL_11, LEVEL_12, LEVEL_13, LEVEL_14, LEVEL_15],
 };
 
+export const PACK_BOUNCE: LevelPack = {
+  id: 'bounce',
+  name: 'Bounce',
+  minPlayers: 2,
+  levels: [LEVEL_26, LEVEL_27, LEVEL_28],
+};
+
 export const ALL_PACKS: LevelPack[] = [
   PACK_BASICS,
   PACK_DUO,
   PACK_HAZARDS,
   PACK_EXTREME,
   PACK_SQUAD,
+  PACK_BOUNCE,
 ];

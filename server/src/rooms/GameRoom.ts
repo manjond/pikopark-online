@@ -10,6 +10,7 @@ import {
   GAME_HEIGHT,
   TILE_SIZE,
   GRAVITY,
+  SPRING_VELOCITY,
   SolidRect,
   LevelData,
   LevelPack,
@@ -38,6 +39,10 @@ export class GameRoom extends Room<GameState> {
   private gameStarted = false;
   private mapWidth = GAME_WIDTH; // current level's map width
 
+  /** Per-client input rate limiting: max messages per 1s window. */
+  private readonly MAX_INPUTS_PER_SECOND = 120;
+  private inputRates = new Map<string, { count: number; windowStart: number }>();
+
   onCreate(_options: Record<string, unknown>): void {
     this.setState(new GameState());
     this.state.roomCode = this.generateRoomCode();
@@ -46,6 +51,17 @@ export class GameRoom extends Room<GameState> {
     this.loadLevel(0);
 
     this.onMessage<InputMessage>('input', (client, message) => {
+      // Drop silently if this client exceeds its budget for the current 1 s
+      // window. 120 msg/s is roughly 2× the max expected frame rate and gives
+      // plenty of headroom for legitimate clients.
+      const now = Date.now();
+      const rec = this.inputRates.get(client.sessionId);
+      if (!rec || now - rec.windowStart >= 1000) {
+        this.inputRates.set(client.sessionId, { count: 1, windowStart: now });
+      } else {
+        rec.count++;
+        if (rec.count > this.MAX_INPUTS_PER_SECOND) return;
+      }
       handlePlayerInput(this.state, client, message);
     });
 
@@ -140,6 +156,7 @@ export class GameRoom extends Room<GameState> {
       this.hostId = '';
       this.state.players.forEach((p) => { if (!this.hostId) this.hostId = p.id; });
     }
+    this.inputRates.delete(client.sessionId);
     this.broadcastPlayerList();
   }
 
@@ -171,6 +188,7 @@ export class GameRoom extends Room<GameState> {
       obj.linkedId = def.linkedId;
       obj.latching = def.latching ?? false;
       obj.activated = false;
+      obj.power = def.power ?? (def.type === 'spring' ? SPRING_VELOCITY : 0);
       this.state.interactiveObjects.set(def.id, obj);
       this.prevObjStates.set(def.id, false);
     }
@@ -354,6 +372,36 @@ export class GameRoom extends Room<GameState> {
 
     // ── Block jump if another player is standing on top ────────────────────────
     // (handled in handlePlayerInput — see PlayerCommands.ts)
+
+    // ── Spring launch ─────────────────────────────────────────────────────────
+    // When a player lands on the top surface of a spring, snap to the top
+    // and apply an upward impulse. One broadcast per bounce lets clients
+    // play a sound and animate the spring.
+    this.state.interactiveObjects.forEach((spring) => {
+      if (spring.type !== 'spring') return;
+      const sLeft = spring.x - spring.width / 2;
+      const sRight = spring.x + spring.width / 2;
+      const sTop  = spring.y - spring.height / 2;
+
+      this.state.players.forEach((player) => {
+        const pLeft   = player.x - TILE_SIZE / 2;
+        const pRight  = player.x + TILE_SIZE / 2;
+        const pBottom = player.y + TILE_SIZE / 2;
+
+        const horizOverlap = pRight > sLeft && pLeft < sRight;
+        const onTop =
+          pBottom >= sTop &&
+          pBottom <= sTop + TILE_SIZE * 0.6 &&
+          player.velocityY >= 0;
+
+        if (horizOverlap && onTop) {
+          player.y = sTop - TILE_SIZE / 2;
+          player.velocityY = spring.power !== 0 ? spring.power : SPRING_VELOCITY;
+          player.isGrounded = false;
+          this.broadcast('springBounce', { id: spring.id, playerId: player.id });
+        }
+      });
+    });
 
     // ── Button trigger ────────────────────────────────────────────────────────
     this.state.interactiveObjects.forEach((obj) => {

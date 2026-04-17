@@ -61,6 +61,11 @@ export function playLevelComplete(): void {
   });
 }
 
+export function playSpring(): void {
+  // Fast upward sweep — "boing"
+  tone(180, 1100, 0.22, 0.22, 'triangle');
+}
+
 // ─── Background music ─────────────────────────────────────────────────────────
 // A simple looping chiptune: bass drone + 8-note square-wave melody.
 // C major pentatonic — C4 E4 G4 E4 G4 A4 G4 C5

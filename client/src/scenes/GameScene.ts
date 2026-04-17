@@ -21,7 +21,7 @@ import {
   generatePlayerSpritesheet,
   registerPlayerAnims,
 } from '../utils/PlayerTextures';
-import { playJump, playLevelComplete, startBgMusic, stopBgMusic } from '../utils/SoundSystem';
+import { playJump, playLevelComplete, playSpring, startBgMusic, stopBgMusic } from '../utils/SoundSystem';
 
 interface GameSceneData {
   room?: Room;
@@ -330,6 +330,12 @@ export class GameScene extends Phaser.Scene {
       this.cameras.main.flash(400, 255, 0, 0, false);
     });
 
+    // ── Spring bounce — play sound and squash-animate the pad ──────────────
+    room.onMessage('springBounce', (data: { id: string; playerId: string }) => {
+      playSpring();
+      this.interactiveObjects.get(data.id)?.playBounceAnim();
+    });
+
     console.log(`[GameScene] Connected → room ${room.id} (${room.sessionId})`);
   }
 
@@ -389,6 +395,9 @@ export class GameScene extends Phaser.Scene {
     // Player positions come from the server's next 'positions' broadcast —
     // no manual reset needed; they'll interpolate to the new spawn points.
 
+    // Fade back in — the complement of the fade-out fired on levelComplete
+    this.cameras.main.fadeIn(420, 0, 0, 0);
+
     this.levelStartTime = Date.now();
     console.log(`[GameScene] Rebuilt → Level ${levelId}`);
   }
@@ -401,6 +410,10 @@ export class GameScene extends Phaser.Scene {
     // Screen shake + particle burst at the goal for impact
     this.cameras.main.shake(420, 0.010);
     this.emitGoalBurst();
+
+    // Fade to black just before the server sends the next level (5 s delay).
+    // rebuildLevel() will fade back in on arrival of levelStart.
+    this.time.delayedCall(4400, () => this.cameras.main.fadeOut(600, 0, 0, 0));
 
     const elapsedMs = Date.now() - this.levelStartTime;
     const totalSecs = Math.floor(elapsedMs / 1000);

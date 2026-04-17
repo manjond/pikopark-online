@@ -7,6 +7,8 @@ const BUTTON_ACTIVE   = 0x00ff88;  // green  — pressed
 const DOOR_COLOR      = 0xcc3333;  // red    — closed barrier
 const TRAP_ACTIVE     = 0xff2200;  // red-orange — dangerous spikes
 const TRAP_INACTIVE   = 0x444444;  // grey — deactivated trap
+const SPRING_BASE     = 0x22cc88;  // green  — spring body
+const SPRING_ARROW    = 0xffffff;  // white  — arrow up indicator
 
 export class InteractiveObject {
   private readonly scene: Phaser.Scene;
@@ -20,6 +22,9 @@ export class InteractiveObject {
 
   /** Physics image used for local player collision (doors only). */
   private doorImg: Phaser.Physics.Arcade.Image | null = null;
+
+  /** Optional arrow glyph drawn on top of a spring pad. */
+  private springArrow: Phaser.GameObjects.Triangle | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -102,6 +107,25 @@ export class InteractiveObject {
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, TRAP_ACTIVE);
       this.rect.setDepth(0);
 
+    } else if (data.type === 'spring') {
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, SPRING_BASE);
+      this.rect.setStrokeStyle(1, 0x115533);
+      this.rect.setDepth(2);
+
+      // Small white upward triangle centred on the pad as a "launch" hint.
+      const ax = data.x;
+      const ay = data.y;
+      const w = Math.min(data.width * 0.5, 20);
+      const h = Math.min(data.height * 0.9, 12);
+      this.springArrow = scene.add.triangle(
+        ax, ay,
+        0, h / 2,
+        w, h / 2,
+        w / 2, -h / 2,
+        SPRING_ARROW,
+      );
+      this.springArrow.setDepth(3);
+
     } else {
       // Door — full-height barrier
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, DOOR_COLOR);
@@ -135,17 +159,41 @@ export class InteractiveObject {
       this.rect.setFillStyle(data.activated ? TRAP_INACTIVE : TRAP_ACTIVE);
       this.rect.setAlpha(data.activated ? 0.35 : 1);
     }
-    // goal has no sync state — always visible and spinning
+    // goal/spring have no sync state — goal spins, spring animates on bounce
     this.prevActivated = data.activated;
+  }
+
+  /** Play a brief squash animation on the spring pad (called on bounce). */
+  playBounceAnim(): void {
+    if (this.type !== 'spring') return;
+    this.scene.tweens.killTweensOf(this.rect);
+    if (this.springArrow) this.scene.tweens.killTweensOf(this.springArrow);
+
+    this.rect.setScale(1, 1);
+    this.scene.tweens.add({
+      targets: this.rect,
+      scaleY: { from: 0.55, to: 1 },
+      duration: 220,
+      ease: 'Back.easeOut',
+    });
+    if (this.springArrow) {
+      this.scene.tweens.add({
+        targets: this.springArrow,
+        y: { from: this.springArrow.y - 6, to: this.springArrow.y },
+        duration: 220,
+        ease: 'Back.easeOut',
+      });
+    }
   }
 
   destroy(): void {
     this.scene.tweens.killTweensOf(this.rect);
     this.rect.destroy();
 
-    if (this.goalStar)  { this.scene.tweens.killTweensOf(this.goalStar);  this.goalStar.destroy(); }
-    if (this.goalGlow)  { this.scene.tweens.killTweensOf(this.goalGlow);  this.goalGlow.destroy(); }
-    if (this.goalLabel) { this.scene.tweens.killTweensOf(this.goalLabel); this.goalLabel.destroy(); }
+    if (this.goalStar)    { this.scene.tweens.killTweensOf(this.goalStar);    this.goalStar.destroy(); }
+    if (this.goalGlow)    { this.scene.tweens.killTweensOf(this.goalGlow);    this.goalGlow.destroy(); }
+    if (this.goalLabel)   { this.scene.tweens.killTweensOf(this.goalLabel);   this.goalLabel.destroy(); }
+    if (this.springArrow) { this.scene.tweens.killTweensOf(this.springArrow); this.springArrow.destroy(); }
 
     this.doorImg?.destroy();
   }

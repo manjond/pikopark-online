@@ -29,6 +29,14 @@ export const JUMP_VELOCITY = -1067;
 /** Player horizontal movement speed (px/s) */
 export const MOVE_SPEED = 400;
 
+/**
+ * Default spring-pad launch velocity (px/s, negative = upward).
+ * Roughly 1.5× the normal jump impulse, giving ~560 px of peak rise
+ * (clearly above a stacked jump's ~280 px rise from ground).
+ * A level can override per-spring via LevelObjectDef.power.
+ */
+export const SPRING_VELOCITY = -1600;
+
 /** One hex color per player slot (P1-P8) */
 export const PLAYER_COLORS: readonly number[] = [
   0xff3333, // P1 Red

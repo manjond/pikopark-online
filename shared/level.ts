@@ -18,7 +18,7 @@ export interface SpawnPoint {
 
 export interface LevelObjectDef {
   id: string;
-  type: 'button' | 'door' | 'goal' | 'trap';
+  type: 'button' | 'door' | 'goal' | 'trap' | 'spring';
   x: number;      // center x
   y: number;      // center y
   width: number;
@@ -28,6 +28,8 @@ export interface LevelObjectDef {
   linkedId: string;
   /** If true the button latches permanently after first trigger (not pressure-sensitive). */
   latching?: boolean;
+  /** Spring launch velocity (px/s, negative = upward). Overrides the default. */
+  power?: number;
 }
 
 export interface LevelData {
