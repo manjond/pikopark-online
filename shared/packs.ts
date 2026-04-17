@@ -28,7 +28,7 @@ import { LEVEL_25 } from './levels/level25';
 export const PACK_BASICS: LevelPack = {
   id: 'basics',
   name: 'Basics',
-  minPlayers: 1,
+  minPlayers: 2,
   levels: [LEVEL_1, LEVEL_2, LEVEL_3, LEVEL_4, LEVEL_5],
 };
 
