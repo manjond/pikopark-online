@@ -18,7 +18,7 @@ export interface SpawnPoint {
 
 export interface LevelObjectDef {
   id: string;
-  type: 'button' | 'door' | 'goal';
+  type: 'button' | 'door' | 'goal' | 'trap';
   x: number;      // center x
   y: number;      // center y
   width: number;

@@ -31,6 +31,7 @@ export class GameRoom extends Room<GameState> {
   private hostId = '';
   private prevObjStates = new Map<string, boolean>();
   private tickCount = 0;
+  private trapRestartPending = false;
 
   // Pack selection — host can change this before game starts
   private selectedPack: LevelPack = PACK_BASICS;
@@ -138,13 +139,14 @@ export class GameRoom extends Room<GameState> {
 
   // ─── Level loading ────────────────────────────────────────────────────────────
 
-  private loadLevel(levelIndex: number): void {
+  private loadLevel(levelIndex: number, restart = false): void {
     const levels = this.selectedPack.levels;
     const levelData: LevelData = levels[levelIndex] ?? levels[0] ?? this.selectedPack.levels[0];
     this.currentLevelIndex = levelIndex;
     this.mapWidth = levelData.mapWidth ?? GAME_WIDTH;
     this.solidRects = levelData.solidRects;
     this.levelCompleted = false;
+    this.trapRestartPending = false;
     this.state.currentLevel = levelData.id;
 
     this.state.interactiveObjects.clear();
@@ -179,7 +181,7 @@ export class GameRoom extends Room<GameState> {
       spawnIndex++;
     });
 
-    if (levelIndex > 0) {
+    if (levelIndex > 0 || restart) {
       this.broadcast('levelStart', { levelId: levelData.id, mapWidth: this.mapWidth });
       const objStates: Array<{ id: string; activated: boolean }> = [];
       this.state.interactiveObjects.forEach((obj) => {
@@ -385,6 +387,32 @@ export class GameRoom extends Room<GameState> {
       const door = this.state.interactiveObjects.get(doorId);
       if (door) door.activated = v.active >= v.total;
     });
+
+    // ── Trap detection — touching a trap restarts the level ────────────────────
+    if (!this.levelCompleted && !this.trapRestartPending) {
+      this.state.interactiveObjects.forEach((obj) => {
+        if (obj.type !== 'trap' || this.trapRestartPending) return;
+        if (obj.activated) return; // linked button is held — trap is deactivated
+        const tL = obj.x - obj.width  / 2;
+        const tR = obj.x + obj.width  / 2;
+        const tT = obj.y - obj.height / 2;
+        const tB = obj.y + obj.height / 2;
+        this.state.players.forEach((player) => {
+          if (this.trapRestartPending) return;
+          const pL = player.x - TILE_SIZE / 2;
+          const pR = player.x + TILE_SIZE / 2;
+          const pT = player.y - TILE_SIZE / 2;
+          const pB = player.y + TILE_SIZE / 2;
+          if (pR > tL && pL < tR && pB > tT && pT < tB) {
+            this.trapRestartPending = true;
+          }
+        });
+      });
+      if (this.trapRestartPending) {
+        this.broadcast('trapHit', {});
+        this.clock.setTimeout(() => { this.loadLevel(this.currentLevelIndex, true); }, 800);
+      }
+    }
 
     // ── Goal detection ─────────────────────────────────────────────────────────
     if (!this.levelCompleted) {

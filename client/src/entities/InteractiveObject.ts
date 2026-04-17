@@ -5,6 +5,8 @@ import { playButtonPress, playDoorOpen } from '../utils/SoundSystem';
 const BUTTON_INACTIVE = 0xffff00;  // yellow — waiting for player
 const BUTTON_ACTIVE   = 0x00ff88;  // green  — pressed
 const DOOR_COLOR      = 0xcc3333;  // red    — closed barrier
+const TRAP_ACTIVE     = 0xff2200;  // red-orange — dangerous spikes
+const TRAP_INACTIVE   = 0x444444;  // grey — deactivated trap
 
 export class InteractiveObject {
   private readonly scene: Phaser.Scene;
@@ -96,6 +98,10 @@ export class InteractiveObject {
         ease: 'Sine.easeInOut',
       });
 
+    } else if (data.type === 'trap') {
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, TRAP_ACTIVE);
+      this.rect.setDepth(0);
+
     } else {
       // Door — full-height barrier
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, DOOR_COLOR);
@@ -125,6 +131,9 @@ export class InteractiveObject {
       if (this.doorImg?.body) {
         this.doorImg.body.enable = !data.activated;
       }
+    } else if (this.type === 'trap') {
+      this.rect.setFillStyle(data.activated ? TRAP_INACTIVE : TRAP_ACTIVE);
+      this.rect.setAlpha(data.activated ? 0.35 : 1);
     }
     // goal has no sync state — always visible and spinning
     this.prevActivated = data.activated;

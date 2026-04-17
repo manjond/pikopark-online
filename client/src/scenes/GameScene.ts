@@ -276,6 +276,11 @@ export class GameScene extends Phaser.Scene {
       this.rebuildLevel(data.levelId, data.mapWidth);
     });
 
+    // ── Trap hit — flash red then server will restart ──────────────────────
+    room.onMessage('trapHit', () => {
+      this.cameras.main.flash(400, 255, 0, 0, false);
+    });
+
     console.log(`[GameScene] Connected → room ${room.id} (${room.sessionId})`);
   }
 
