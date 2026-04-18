@@ -6,11 +6,12 @@ import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 // traps, and a wide map. The ultimate test of teamwork.
 //
 // Sequence:
-//   1. Stack to press btn25a (stacking-only) → door 1 opens
-//   2. Player A holds pressure btn25b → deactivates spike zone 1
-//   3. Player B passes through safe zone → presses latching btn25c
-//   4. Spike zone 2 permanently disabled, door 2 opens
-//   5. Both navigate final spike section to goal
+//   1. Stack to press btn25a (stacking-only, latching) → door 1 opens forever
+//   2. Both players pass; one holds pressure btn25b → deactivates spike zone 1
+//   3. The other passes through, presses latching btn25c → zone 2 safe + door 2 opens
+//   4. They navigate the final spike section to the goal
+// btn25a is latching so the stacker can jump down and keep going — otherwise
+// the 2-player session couldn't complete the level.
 
 const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;           // 688
 const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 672
@@ -44,7 +45,7 @@ export const LEVEL_25: LevelData = {
   ],
 
   objects: [
-    // Step 1: Stacking-only button
+    // Step 1: Stacking-only latching button
     {
       id: 'btn25a',
       type: 'button',
@@ -54,6 +55,7 @@ export const LEVEL_25: LevelData = {
       height: 8,
       requiredPlayers: 1,
       linkedId: 'door25a',
+      latching: true,
     },
     {
       id: 'door25a',

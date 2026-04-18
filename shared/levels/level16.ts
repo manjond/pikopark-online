@@ -55,7 +55,7 @@ export const LEVEL_16: LevelData = {
       requiredPlayers: 0,
       linkedId: '',
     },
-    // Wide button — requires 2 players simultaneously
+    // Wide button — 2 players must step on it to latch it (then stays open)
     {
       id: 'btn16',
       type: 'button',
@@ -65,6 +65,7 @@ export const LEVEL_16: LevelData = {
       height: 8,
       requiredPlayers: 2,
       linkedId: 'door16',
+      latching: true,
     },
     {
       id: 'door16',

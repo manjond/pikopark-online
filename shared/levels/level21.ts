@@ -44,6 +44,7 @@ export const LEVEL_21: LevelData = {
       height: 8,
       requiredPlayers: 2,
       linkedId: 'door21',
+      latching: true,
     },
     {
       id: 'door21',

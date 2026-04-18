@@ -4,12 +4,14 @@ import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 // Level 10 — "Pinnacle"  (Pack: Duo, 2 players — hardest)
 // 1920px wide. Combines all duo mechanics in one continuous puzzle:
 //   • Stacking-only button A (latching) unlocks door A
-//   • Pressure button B holds door B (player must STAY on it)
-//   • Beyond door B: double-stack-only platform with latching button C
+//   • Floor button B (latching) unlocks door B
+//   • Beyond door B: stacking-only platform with latching button C
 //   • All three doors open → goal reachable
 //
-// Flow: Stack → btn10a latches. A holds btn10b, B crosses door B.
+// Flow: Stack → btn10a latches. Either player presses btn10b (latches).
 //       Stack again for btn10c (latches). door10c opens. Both reach goal.
+// All buttons latching so the 2-player session can always complete — if any
+// were pressure-only the holder would get stuck before the next puzzle.
 
 const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
 const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
@@ -64,7 +66,7 @@ export const LEVEL_10: LevelData = {
       requiredPlayers: 0,
       linkedId: 'btn10a',
     },
-    // Pressure button B (floor-level, must be held)
+    // Floor button B (latching — either player can press and continue)
     {
       id: 'btn10b',
       type: 'button',
@@ -74,6 +76,7 @@ export const LEVEL_10: LevelData = {
       height: 8,
       requiredPlayers: 1,
       linkedId: 'door10b',
+      latching: true,
     },
     {
       id: 'door10b',

@@ -3,9 +3,11 @@ import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 
 // Level 9 — "Gauntlet"  (Pack: Duo, 2 players)
 // Wide 2560px map divided into 3 sections:
-//   Section 1 (0–768):   pressure relay  — A holds, B crosses
+//   Section 1 (0–768):   latching trigger — press and go
 //   Section 2 (768–1792): stacking puzzle — stack to reach latching button
-//   Section 3 (1792–2560): simultaneous 2-player button → final door + goal
+//   Section 3 (1792–2560): pressure hold — one player holds, the other
+//                          reaches the goal (only one player needs to touch
+//                          the goal for the room to complete).
 
 const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
 const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
@@ -40,7 +42,7 @@ export const LEVEL_9: LevelData = {
   ],
 
   objects: [
-    // Section 1 — relay
+    // Section 1 — latching trigger (any player can press, door stays open)
     {
       id: 'btn9a',
       type: 'button',
@@ -50,6 +52,7 @@ export const LEVEL_9: LevelData = {
       height: 8,
       requiredPlayers: 1,
       linkedId: 'door9a',
+      latching: true,
     },
     {
       id: 'door9a',
@@ -83,15 +86,15 @@ export const LEVEL_9: LevelData = {
       requiredPlayers: 0,
       linkedId: 'btn9b',
     },
-    // Section 3 — 2-player simultaneous button
+    // Section 3 — pressure-hold relay (1 holds, the other reaches the goal)
     {
       id: 'btn9c',
       type: 'button',
       x: 2176,
       y: PLAYER_ON_FLOOR,
-      width: 128,
+      width: TILE_SIZE,
       height: 8,
-      requiredPlayers: 2,
+      requiredPlayers: 1,
       linkedId: 'door9c',
     },
     {

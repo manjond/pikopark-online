@@ -2,10 +2,9 @@ import { LevelData } from '../level';
 import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 
 // Level 14 — "Chain Gang"  (Pack: Squad, 4 players)
-// Wide 2560px map. Four pressure buttons must ALL be held simultaneously.
-// Each is positioned so exactly one player can stand on it.
-// When all four are held the door opens — players must move quickly before
-// someone slips off. After crossing, a latching button keeps the door open.
+// Wide 2560px map. Three pressure buttons must be held simultaneously — the
+// fourth player walks past the open door to a latching button that locks
+// it open permanently. The three holders can then release and follow.
 
 const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
 const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
@@ -36,11 +35,11 @@ export const LEVEL_14: LevelData = {
   ],
 
   objects: [
-    // Four simultaneous pressure buttons (AND logic — all linked to door14)
-    { id: 'btn14a', type: 'button', x: 384,  y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door14' },
-    { id: 'btn14b', type: 'button', x: 512,  y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door14' },
-    { id: 'btn14c', type: 'button', x: 640,  y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door14' },
-    { id: 'btn14d', type: 'button', x: 768,  y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door14' },
+    // Three simultaneous pressure buttons (AND logic — all linked to door14)
+    // The 4th player runs past the open door to latch btn14safe.
+    { id: 'btn14a', type: 'button', x: 384, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door14' },
+    { id: 'btn14b', type: 'button', x: 544, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door14' },
+    { id: 'btn14c', type: 'button', x: 704, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door14' },
     {
       id: 'door14',
       type: 'door',

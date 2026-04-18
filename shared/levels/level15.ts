@@ -3,10 +3,14 @@ import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 
 // Level 15 — "Summit"  (Pack: Squad, 4 players — grand finale)
 // Wide 3200px map. Combines ALL mechanics:
-//   • 4-player simultaneous button (section 1)
+//   • 4 latching buttons to split up and press (section 1)
 //   • 3-player stacking puzzle (section 2, 3-stack-only zone at y=370)
-//   • 2-player relay across a wide gap (section 3)
-//   • Final 4-player simultaneous button to open the last door (section 4)
+//   • Pressure-hold relay over a wide gap (section 3)
+//   • 4 latching buttons again before the final door (section 4)
+//
+// All cross-section buttons are latching so the team can regroup; the only
+// pressure-hold is section 3, where one player stays on btn15f while the
+// others complete the path — standard "one holds, the rest finish" pattern.
 //
 // Physics:
 //   3-stack feet peak y = 357 → 3-stack-only zone = [357, 389)
@@ -44,11 +48,11 @@ export const LEVEL_15: LevelData = {
   ],
 
   objects: [
-    // Section 1 — four simultaneous floor buttons
-    { id: 'btn15a', type: 'button', x: 192, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a' },
-    { id: 'btn15b', type: 'button', x: 320, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a' },
-    { id: 'btn15c', type: 'button', x: 448, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a' },
-    { id: 'btn15d', type: 'button', x: 576, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a' },
+    // Section 1 — four latching floor buttons (AND logic: all four must be pressed)
+    { id: 'btn15a', type: 'button', x: 192, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
+    { id: 'btn15b', type: 'button', x: 320, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
+    { id: 'btn15c', type: 'button', x: 448, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
+    { id: 'btn15d', type: 'button', x: 576, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
     {
       id: 'door15a',
       type: 'door',
@@ -113,11 +117,11 @@ export const LEVEL_15: LevelData = {
       requiredPlayers: 0,
       linkedId: '',
     },
-    // Section 4 — final 4-player simultaneous button
-    { id: 'btn15h', type: 'button', x: 2624, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d' },
-    { id: 'btn15i', type: 'button', x: 2688, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d' },
-    { id: 'btn15j', type: 'button', x: 2752, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d' },
-    { id: 'btn15k', type: 'button', x: 2816, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d' },
+    // Section 4 — four latching floor buttons (AND logic)
+    { id: 'btn15h', type: 'button', x: 2624, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
+    { id: 'btn15i', type: 'button', x: 2688, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
+    { id: 'btn15j', type: 'button', x: 2752, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
+    { id: 'btn15k', type: 'button', x: 2816, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
     {
       id: 'door15d',
       type: 'door',

@@ -2,14 +2,13 @@ import { LevelData } from '../level';
 import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 
 // Level 24 — "Spike Pinnacle"  (Pack: Extreme, 2 players)
-// Stacking to a very high platform (3-player stack zone) with spikes below.
+// Stacking to a high platform (2-player stack zone) with spikes below.
 // Wide map. Spike bridge section + stacking mechanic combined.
-// Hardest stacking level: BTN_PLATFORM_TOP = 357 (3-player stack needed)
 //
 // Physics:
-//   3-stack: player C center = 672 - 2*32 = 608; jump peak = 608-267=341
-//   Platform top = 357: stacked peak feet 341 < 357, reachable (341 ≤ 357 ✓)
-//   Solo: unreachable (421 > 357). 2-stack: (389 > 357). 3-stack: (357 ≤ 357) ✓
+//   Platform top = 395 (stacking-only zone = [389, 421))
+//   Solo feet peak 421 > 395 → unreachable solo ✓
+//   2-stack feet peak 389 ≤ 395 → reachable via stacking ✓
 
 const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;           // 688
 const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 672
@@ -18,7 +17,7 @@ const MAP_W = 1920;
 
 const BTN_PLAT_X = 256;
 const BTN_PLAT_W = 192;
-const BTN_PLAT_Y = 357;  // 3-stack only
+const BTN_PLAT_Y = 395;  // 2-stack only
 
 const GOAL_PLAT_X = 1536;
 const GOAL_PLAT_W = 256;
@@ -47,12 +46,12 @@ export const LEVEL_24: LevelData = {
   ],
 
   objects: [
-    // High button — 3-player stack needed
+    // High button — 2-player stack needed
     {
       id: 'btn24',
       type: 'button',
       x: BTN_PLAT_X + BTN_PLAT_W / 2,  // 352
-      y: BTN_PLAT_Y - TILE_SIZE / 2,    // 341
+      y: BTN_PLAT_Y - TILE_SIZE / 2,    // 379
       width: BTN_PLAT_W,
       height: 8,
       requiredPlayers: 1,
