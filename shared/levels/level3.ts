@@ -22,7 +22,7 @@ export const LEVEL_3: LevelData = {
 
   solidRects: [groundRect(), PLAT_A, PLAT_B],
 
-  spawnPoints: standardSpawns(4, 64, 64),
+  spawnPoints: standardSpawns(),
 
   objects: [
     platformButton('btn3a', PLAT_A, 'door3', { latching: true }),

@@ -21,11 +21,11 @@ export const LEVEL_2: LevelData = {
 
   solidRects: [groundRect(), BTN_PLAT],
 
-  spawnPoints: standardSpawns(4, 64, 64),
+  spawnPoints: standardSpawns(),
 
   objects: [
     platformButton('btn2', BTN_PLAT, 'door2', { latching: true }),
-    fullHeightDoor('door2', 896, 'btn2'),
+    fullHeightDoor('door2', 896),
     goalOnFloor('goal2', 1195),
   ],
 };

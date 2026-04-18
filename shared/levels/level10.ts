@@ -42,11 +42,11 @@ export const LEVEL_10: LevelData = {
 
   objects: [
     platformButton('btn10a', PLAT_A, 'door10a', { latching: true }),
-    fullHeightDoor('door10a', 448, 'btn10a'),
+    fullHeightDoor('door10a', 448),
     floorButton('btn10b', 832, 'door10b', { latching: true }),
-    fullHeightDoor('door10b', 1024, 'btn10b'),
+    fullHeightDoor('door10b', 1024),
     platformButton('btn10c', PLAT_C, 'door10c', { latching: true }),
-    fullHeightDoor('door10c', 1600, 'btn10c'),
+    fullHeightDoor('door10c', 1600),
     goalOnPlatform('goal10', GOAL_PLAT),
   ],
 };

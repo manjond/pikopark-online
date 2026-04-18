@@ -31,9 +31,9 @@ export const LEVEL_7: LevelData = {
 
   objects: [
     floorButton('btn7a', 256, 'door7a'),
-    fullHeightDoor('door7a', 640, 'btn7a'),
+    fullHeightDoor('door7a', 640),
     floorButton('btn7b', 1024, 'door7b', { latching: true }),
-    fullHeightDoor('door7b', 1280, 'btn7b'),
+    fullHeightDoor('door7b', 1280),
     goalOnFloor('goal7', 1760),
   ],
 };

@@ -33,7 +33,7 @@ export const LEVEL_6: LevelData = {
 
   objects: [
     platformButton('btn6', BTN_PLAT, 'door6'),
-    fullHeightDoor('door6', 640, 'btn6'),
+    fullHeightDoor('door6', 640),
     goalOnPlatform('goal6', GOAL_PLAT),
   ],
 };

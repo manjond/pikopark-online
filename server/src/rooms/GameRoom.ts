@@ -349,6 +349,17 @@ export class GameRoom extends Room<GameState> {
           }
         }
       }
+
+      // ── Player vs. player lateral collision ───────────────────────────────────
+      // Bodies are solid: walking into another player blocks horizontal motion.
+      // We use MTV (minimum-translation-vector) resolution — the stacking case
+      // (A standing on B's head) has near-zero vertical overlap and is skipped
+      // so this pass never disturbs stacking.
+      for (let i = 0; i < players.length; i++) {
+        for (let j = i + 1; j < players.length; j++) {
+          this.resolvePlayerPair(players[i][1], players[j][1]);
+        }
+      }
     }
 
     // ── Carry: if A is standing on B, propagate B's horizontal movement ────────
@@ -519,6 +530,40 @@ export class GameRoom extends Room<GameState> {
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Resolve a pair of overlapping players along the axis of smallest
+   * penetration. Stacking (vertical overlap ~0) is left alone so the
+   * dedicated stacking pass owns that interaction; only lateral overlap
+   * is pushed apart. Each player absorbs half the correction and any
+   * velocity pointing *into* the other player is zeroed.
+   */
+  private resolvePlayerPair(pA: PlayerState, pB: PlayerState): void {
+    const overlapX = TILE_SIZE - Math.abs(pA.x - pB.x);
+    if (overlapX <= 0) return;
+    const overlapY = TILE_SIZE - Math.abs(pA.y - pB.y);
+    if (overlapY <= 0) return;
+    // Smaller penetration on Y ⇒ stacking contact, not a side-on hit.
+    if (overlapY <= overlapX) return;
+
+    const halfPush = overlapX / 2;
+    const aLeftOfB = pA.x < pB.x;
+    if (aLeftOfB) {
+      pA.x -= halfPush;
+      pB.x += halfPush;
+      if (pA.velocityX > 0) pA.velocityX = 0;
+      if (pB.velocityX < 0) pB.velocityX = 0;
+    } else {
+      pA.x += halfPush;
+      pB.x -= halfPush;
+      if (pA.velocityX < 0) pA.velocityX = 0;
+      if (pB.velocityX > 0) pB.velocityX = 0;
+    }
+
+    const HT = TILE_SIZE / 2;
+    pA.x = Math.max(HT, Math.min(this.mapWidth - HT, pA.x));
+    pB.x = Math.max(HT, Math.min(this.mapWidth - HT, pB.x));
+  }
 
   private broadcastPlayerList(): void {
     const players: Array<{ id: string; name: string; color: number }> = [];

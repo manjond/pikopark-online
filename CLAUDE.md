@@ -111,11 +111,12 @@ All visuals and sounds are generated at runtime via Web APIs. **Advantages**: ze
 
 ### Cooperative Mechanics (implemented)
 1. **Weight buttons**: Buttons that activate only when N players stand on them simultaneously
-2. **Linked doors**: Buttons open corresponding doors (1-to-1 link via `linkedId`)
+2. **Linked doors**: Buttons open doors via `button.linkedId → door.id`. Multiple buttons may share one door (AND logic). Doors themselves leave `linkedId` empty.
 3. **Player stacking**: Players can jump on each other's heads to reach higher platforms
 4. **Latching buttons**: One-shot buttons that stay activated once triggered
 5. **Carry**: Standing on another player's head — you move with them horizontally
 6. **Jump blocking**: You cannot jump if another player is standing on your head
+7. **Solid bodies**: Players block each other laterally — MTV resolution in `GameRoom.resolvePlayerPair`; vertical overlap is left to the stacking pass
 
 ### Cooperative Mechanics (planned)
 5. **Spring/launch pads**: Catapult a player upward
@@ -286,6 +287,14 @@ These are ideas for making the game more engaging — not yet scheduled, just do
 ## Level Helpers & Migration Plan
 
 `shared/levels/_helpers.ts` centralises the constants and factory functions that every `levelN.ts` currently hand-rolls, and ships a static validator that the server runs at startup (`validateAllPacks` in `server/src/index.ts`). If any level has a structural error (missing goal, broken linkedId, unsolvable pressure AND-group), the server aborts boot.
+
+### Level-authoring conventions (enforce when migrating)
+
+- **Spawn points**: always call `standardSpawns()` with no arguments. The default (4 players at `48, 112, 176, 240`, y on the floor) fits every map ≥ 256 px wide and keeps rosters consistent across packs.
+- **Door `linkedId`**: always leave empty (`fullHeightDoor('doorX', x)` — omit the third argument). Button-to-door propagation is driven solely by `button.linkedId → door`; the door's own `linkedId` is decorative and pollutes diffs when it drifts.
+- **Button placement**: use `floorButton` for floor-level buttons and `platformButton(id, platformRect, …)` for anything sitting on a platform. Never hand-roll the `x`/`y`/`width` — the factories derive them from the platform.
+- **Platform reachability**: pick the y based on [SOLO|STACK2|STACK3|SPRING]`_FEET_PEAK` bands from `_helpers.ts`; never paste the magic numbers 421/389/357/72.
+- **Latching vs. pressure**: if every button gating a door is non-latching AND `sum(requiredPlayers) >= minPlayers`, the level is unsolvable. The startup validator catches this — don't bypass it.
 
 ### What the helper exports
 - `FLOOR_TOP` (688), `PLAYER_ON_FLOOR` (672)

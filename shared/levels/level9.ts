@@ -39,13 +39,13 @@ export const LEVEL_9: LevelData = {
   objects: [
     // Section 1 — latching trigger
     floorButton('btn9a', 192, 'door9a', { latching: true }),
-    fullHeightDoor('door9a', 640, 'btn9a'),
+    fullHeightDoor('door9a', 640),
     // Section 2 — latching stack button
     platformButton('btn9b', STACK_PLAT, 'door9b', { latching: true }),
-    fullHeightDoor('door9b', 1280, 'btn9b'),
+    fullHeightDoor('door9b', 1280),
     // Section 3 — pressure-hold relay (1 holds, the other reaches goal)
     floorButton('btn9c', 2176, 'door9c'),
-    fullHeightDoor('door9c', 2368, 'btn9c'),
+    fullHeightDoor('door9c', 2368),
     goalOnFloor('goal9', 2464),
   ],
 };

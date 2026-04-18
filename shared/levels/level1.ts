@@ -30,11 +30,11 @@ export const LEVEL_1: LevelData = {
     GOAL_PLAT,
   ],
 
-  spawnPoints: standardSpawns(4, 21, 64),
+  spawnPoints: standardSpawns(),
 
   objects: [
     floorButton('btn1', 299, 'door1'),
-    fullHeightDoor('door1', 512, 'btn1'),
+    fullHeightDoor('door1', 512),
     // Goal x=1088 is the original hand-set value (platform center is 1087.5).
     {
       id: 'goal1',
