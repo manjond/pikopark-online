@@ -98,6 +98,13 @@ export interface ButtonOpts {
   requiredPlayers?: number;
   /** Override the horizontal hit-box width (defaults to TILE_SIZE for floor, full platform width for platform buttons). */
   width?: number;
+  /**
+   * Override the vertical distance from the platform top to the button center.
+   * Default TILE_SIZE/2 (16) floats the button 12px above the platform top —
+   * matches levels 1-25. Bounce pack (27/28) uses 4 to sit the button flush on
+   * the platform; pass `yOffset: 4` for that look.
+   */
+  yOffset?: number;
 }
 
 function buttonWithLatching(
@@ -138,7 +145,7 @@ export function platformButton(
     id,
     type: 'button',
     x: platform.x + platform.width / 2,
-    y: platform.y - TILE_SIZE / 2,
+    y: platform.y - (opts?.yOffset ?? TILE_SIZE / 2),
     width: opts?.width ?? platform.width,
     height: 8,
     requiredPlayers: opts?.requiredPlayers ?? 1,
@@ -315,6 +322,23 @@ export function validateLevel(
         `door "${doorId}" needs ${holdersNeeded} simultaneous pressure holders but ` +
         `minPlayers=${effectiveMinPlayers} — nobody free to cross. Latch at least one ` +
         `linked button or reduce requiredPlayers.`,
+      );
+    }
+  }
+
+  // Orphan-door check: doors have no initial `activated` source other than a
+  // button linking to them (server `GameRoom.ts` only reads `button.linkedId`).
+  // A door without any button in its door-vote group stays closed forever
+  // and blocks anything behind it — usually the goal. This caught a bug in
+  // level 25 where `door.linkedId = 'btn25c'` was decorative and no button
+  // actually pointed to the door.
+  for (const o of level.objects) {
+    if (o.type !== 'door') continue;
+    if (!buttonsPerDoor.has(o.id)) {
+      push(
+        'error',
+        `door "${o.id}" has no button linking to it — it stays closed forever. ` +
+        `Add a button with linkedId="${o.id}" or remove the door.`,
       );
     }
   }

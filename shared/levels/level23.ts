@@ -1,17 +1,24 @@
 import { LevelData } from '../level';
-import { GAME_HEIGHT, TILE_SIZE } from '../constants';
+import {
+  floorTrap,
+  fullHeightDoor,
+  goalOnFloor,
+  groundRect,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
 // Level 23 — "Three Dangers"  (Pack: Extreme, 2 players)
 // Three latching buttons scattered across a wide spiked map.
 // All three must be pressed to open the final door.
 // Spike zones threaten every section — careful platforming needed.
-//
-// Physics: All button platforms ≥ 421 ✓ (solo-reachable)
-
-const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;           // 688
-const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 672
 
 const MAP_W = 2560;
+
+const PLAT_A = platformRect(320,  533, 192);
+const PLAT_B = platformRect(1152, 533, 192);
+const PLAT_C = platformRect(1664, 480, 192);
 
 export const LEVEL_23: LevelData = {
   id: 23,
@@ -20,83 +27,31 @@ export const LEVEL_23: LevelData = {
   mapWidth: MAP_W,
 
   solidRects: [
-    { x: 0, y: FLOOR_TOP, width: MAP_W, height: TILE_SIZE, tileType: 'ground' },
-    // Platforms to navigate spikes
-    { x: 320,  y: 533, width: 192, height: TILE_SIZE, tileType: 'platform' },  // near btn A
-    { x: 800,  y: 507, width: 192, height: TILE_SIZE, tileType: 'platform' },  // mid jump
-    { x: 1152, y: 533, width: 192, height: TILE_SIZE, tileType: 'platform' },  // near btn B
-    { x: 1664, y: 480, width: 192, height: TILE_SIZE, tileType: 'platform' },  // near btn C
-    { x: 2080, y: 507, width: 192, height: TILE_SIZE, tileType: 'platform' },  // final approach
+    groundRect(MAP_W),
+    PLAT_A,
+    // Mid jump stepping stone
+    platformRect(800,  507, 192),
+    PLAT_B,
+    PLAT_C,
+    // Final approach
+    platformRect(2080, 507, 192),
   ],
 
-  spawnPoints: [
-    { x: 64,  y: PLAYER_ON_FLOOR },
-    { x: 128, y: PLAYER_ON_FLOOR },
-    { x: 192, y: PLAYER_ON_FLOOR },
-    { x: 256, y: PLAYER_ON_FLOOR },
-  ],
+  spawnPoints: standardSpawns(),
 
   objects: [
     // Button A — left section
-    {
-      id: 'btn23a',
-      type: 'button',
-      x: 416,
-      y: 533 - TILE_SIZE / 2,  // 517 — on platform
-      width: 192,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door23',
-      latching: true,
-    },
-    { id: 'trap23a', type: 'trap', x: 576, y: PLAYER_ON_FLOOR, width: 96, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
+    platformButton('btn23a', PLAT_A, 'door23', { latching: true }),
+    floorTrap('trap23a', 576, 96),
     // Button B — middle section
-    {
-      id: 'btn23b',
-      type: 'button',
-      x: 1248,
-      y: 533 - TILE_SIZE / 2,  // 517 — on platform
-      width: 192,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door23',
-      latching: true,
-    },
-    { id: 'trap23b', type: 'trap', x: 960,  y: PLAYER_ON_FLOOR, width: 96, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
-    { id: 'trap23c', type: 'trap', x: 1440, y: PLAYER_ON_FLOOR, width: 96, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
+    platformButton('btn23b', PLAT_B, 'door23', { latching: true }),
+    floorTrap('trap23b', 960,  96),
+    floorTrap('trap23c', 1440, 96),
     // Button C — right section
-    {
-      id: 'btn23c',
-      type: 'button',
-      x: 1760,
-      y: 480 - TILE_SIZE / 2,  // 464 — on platform
-      width: 192,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door23',
-      latching: true,
-    },
-    { id: 'trap23d', type: 'trap', x: 1920, y: PLAYER_ON_FLOOR, width: 128, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
-    { id: 'trap23e', type: 'trap', x: 2176, y: PLAYER_ON_FLOOR, width: 96,  height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
-    {
-      id: 'door23',
-      type: 'door',
-      x: 2368,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
-    {
-      id: 'goal23',
-      type: 'goal',
-      x: 2496,
-      y: PLAYER_ON_FLOOR,
-      width: TILE_SIZE,
-      height: TILE_SIZE,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
+    platformButton('btn23c', PLAT_C, 'door23', { latching: true }),
+    floorTrap('trap23d', 1920, 128),
+    floorTrap('trap23e', 2176, 96),
+    fullHeightDoor('door23', 2368),
+    goalOnFloor('goal23', 2496),
   ],
 };

@@ -291,8 +291,9 @@ These are ideas for making the game more engaging — not yet scheduled, just do
 ### Level-authoring conventions (enforce when migrating)
 
 - **Spawn points**: always call `standardSpawns()` with no arguments. The default (4 players at `48, 112, 176, 240`, y on the floor) fits every map ≥ 256 px wide and keeps rosters consistent across packs.
-- **Door `linkedId`**: always leave empty (`fullHeightDoor('doorX', x)` — omit the third argument). Button-to-door propagation is driven solely by `button.linkedId → door`; the door's own `linkedId` is decorative and pollutes diffs when it drifts.
-- **Button placement**: use `floorButton` for floor-level buttons and `platformButton(id, platformRect, …)` for anything sitting on a platform. Never hand-roll the `x`/`y`/`width` — the factories derive them from the platform.
+- **Door `linkedId`**: always leave empty (`fullHeightDoor('doorX', x)` — omit the third argument). Button-to-door propagation is driven solely by `button.linkedId → door`; the door's own `linkedId` is decorative and pollutes diffs when it drifts. The same applies to `trap.linkedId` — buttons drive traps via `button.linkedId → trap`; the reverse pointer is decorative.
+- **Every door must have a button linking to it.** Server `GameRoom.ts` only reads `button.linkedId` to open things, so an orphan door (no button pointing at its id) stays closed forever and blocks whatever is behind it. The startup validator catches this (see "orphan-door check") — this is the 2026-04-18 class of bug that made level 25's `door25b` an impassable ghost barrier.
+- **Button placement**: use `floorButton` for floor-level buttons and `platformButton(id, platformRect, …)` for anything sitting on a platform. Never hand-roll the `x`/`y`/`width` — the factories derive them from the platform. Bounce pack (levels 27/28) uses `yOffset: 4` on `platformButton` to sit the button flush on top of the platform; every other pack uses the default `TILE_SIZE/2` offset (button floats 12 px above the platform top).
 - **Platform reachability**: pick the y based on [SOLO|STACK2|STACK3|SPRING]`_FEET_PEAK` bands from `_helpers.ts`; never paste the magic numbers 421/389/357/72.
 - **Latching vs. pressure**: if every button gating a door is non-latching AND `sum(requiredPlayers) >= minPlayers`, the level is unsolvable. The startup validator catches this — don't bypass it.
 
@@ -305,50 +306,17 @@ These are ideas for making the game more engaging — not yet scheduled, just do
   - `SPRING_FEET_PEAK` = 72 (spring required in `[72, 357)`)
 - Rect factories: `groundRect`, `platformRect`
 - Spawn factory: `standardSpawns(count=4, startX=48, gap=64)`
-- Object factories: `floorButton`, `platformButton`, `fullHeightDoor`, `floorTrap`, `floorSpring`, `goalOnFloor`, `goalOnPlatform`
+- Object factories: `floorButton`, `platformButton`, `fullHeightDoor`, `floorTrap`, `floorSpring`, `goalOnFloor`, `goalOnPlatform`. `platformButton` accepts `{ width, latching, requiredPlayers, yOffset }` — `yOffset` overrides the vertical distance from platform top (default `TILE_SIZE/2 = 16`; bounce pack uses `4`).
 - Validator: `validateLevel`, `validatePack`, `validateAllPacks`
 
-### Migration plan (28 levels, one PR per pack is fine)
-All 28 `levelN.ts` files still hand-roll `FLOOR_TOP`, `PLAYER_ON_FLOOR`, full `SolidRect`/`LevelObjectDef` literals, and 4-spawn arrays. Migrate each file to use the helpers — the output `LevelData` must be byte-identical to the current shape (the validator proves nothing changed behaviourally).
+### Migration status (28 levels ✅ complete)
+All 28 `levelN.ts` files now use the helper factories (`groundRect`, `platformRect`, `standardSpawns`, `floorButton`, `platformButton`, `fullHeightDoor`, `floorTrap`, `floorSpring`, `goalOnFloor`, `goalOnPlatform`). Conventions unified across the whole catalog:
 
-Pending files: `level1.ts`…`level28.ts`. Suggested order (lowest risk first):
-1. Basics pack (1–5)
-2. Duo pack (6–10)
-3. Hazards pack (16–20)
-4. Squad pack (11–15) — wider maps, trickier coordinates
-5. Extreme pack (21–25) — stacking + traps combined
-6. Bounce pack (26–28) — spring physics, verify `SPRING_FEET_PEAK` matches the existing magic numbers in comments
+- All spawns use `standardSpawns()` default (48/112/176/240).
+- All `door.linkedId` and `trap.linkedId` fields are `''` (decorative reverse pointers removed).
+- Bounce pack (27/28) uses `platformButton(..., { yOffset: 4 })` for flush-on-platform placement; every other level uses the factory default (16 px).
 
-Example before/after (Level 16):
-
-```ts
-// before
-const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
-const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
-solidRects: [
-  { x: 0, y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },
-  { x: 320, y: 533, width: 192, height: TILE_SIZE, tileType: 'platform' },
-],
-spawnPoints: [ { x: 64, y: PLAYER_ON_FLOOR }, /* …×3 */ ],
-objects: [
-  { id: 'trap16a', type: 'trap', x: 416, y: PLAYER_ON_FLOOR, width: 96, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
-  // …
-  { id: 'btn16', type: 'button', x: 896, y: PLAYER_ON_FLOOR, width: 160, height: 8, requiredPlayers: 2, linkedId: 'door16', latching: true },
-  { id: 'door16', type: 'door', x: 1088, y: Math.round(GAME_HEIGHT / 2), width: 16, height: GAME_HEIGHT, requiredPlayers: 0, linkedId: 'btn16' },
-  { id: 'goal16', type: 'goal', x: 1220, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
-],
-
-// after
-solidRects: [ groundRect(), platformRect(320, 533, 192) ],
-spawnPoints: standardSpawns(),
-objects: [
-  floorTrap('trap16a', 416, 96),
-  floorTrap('trap16b', 704, 64),
-  floorButton('btn16', 896, 'door16', { latching: true, requiredPlayers: 2, width: 160 }),
-  fullHeightDoor('door16', 1088, 'btn16'),
-  goalOnFloor('goal16', 1220),
-],
-```
+Side-effect bug fix on 2026-04-18: level 25 `door25b` had no button pointing at it — the door stayed closed forever and the "Final Trial" goal was unreachable. The orphan door was removed and a new validator rule (orphan-door check) was added so this class of bug blocks server boot instead of shipping.
 
 ### Validator rules currently enforced
 - Exactly one `goal` object per level
@@ -356,6 +324,7 @@ objects: [
 - Every non-empty `linkedId` resolves to an object in the same level
 - Spawn points within `mapWidth`
 - **Pressure-only AND-group**: if every button linked to a door is non-latching AND `sum(requiredPlayers) >= effectiveMinPlayers`, flag as error (this is the 2026-04-18 class of bug that made 9 levels unsolvable)
+- **Orphan door**: a `door` with no button linking to it — `GameRoom.ts` only opens doors via `button.linkedId`, so an orphan door is permanently impassable (caught `door25b` in "The Final Trial").
 
 ### Future validator upgrades (not yet implemented)
 - Cross-section pressure-door analysis on wide scroll maps (a button in section A locking a door in section B is already caught today by the sum check, but the error message doesn't hint at spatial context)

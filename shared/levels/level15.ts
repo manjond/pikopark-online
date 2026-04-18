@@ -1,5 +1,13 @@
 import { LevelData } from '../level';
-import { GAME_HEIGHT, TILE_SIZE } from '../constants';
+import {
+  floorButton,
+  fullHeightDoor,
+  goalOnPlatform,
+  groundRect,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
 // Level 15 — "Summit"  (Pack: Squad, 4 players — grand finale)
 // Wide 3200px map. Combines ALL mechanics:
@@ -11,15 +19,11 @@ import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 // All cross-section buttons are latching so the team can regroup; the only
 // pressure-hold is section 3, where one player stays on btn15f while the
 // others complete the path — standard "one holds, the rest finish" pattern.
-//
-// Physics:
-//   3-stack feet peak y = 357 → 3-stack-only zone = [357, 389)
-//   Platform at y=370 requires 3-stack ✓
-
-const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
-const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
 
 const MAP_W = 3200;
+
+const STACK3_PLAT = platformRect(1152, 370, 192); // 3-stack-only
+const GOAL_PLAT   = platformRect(2880, 480, 256);
 
 export const LEVEL_15: LevelData = {
   id: 15,
@@ -28,119 +32,38 @@ export const LEVEL_15: LevelData = {
   mapWidth: MAP_W,
 
   solidRects: [
-    { x: 0,    y: FLOOR_TOP, width: MAP_W, height: TILE_SIZE, tileType: 'ground' },
-    // Section 2 — 3-stack-only platform
-    { x: 1152, y: 370, width: 192, height: TILE_SIZE, tileType: 'platform' },
+    groundRect(MAP_W),
+    STACK3_PLAT,
     // Section 2 — stepping stone approach
-    { x: 960,  y: 540, width: 160, height: TILE_SIZE, tileType: 'platform' },
+    platformRect(960,  540, 160),
     // Section 3 — relay stepping stones
-    { x: 1792, y: 560, width: 160, height: TILE_SIZE, tileType: 'platform' },
-    { x: 2048, y: 520, width: 160, height: TILE_SIZE, tileType: 'platform' },
-    // Final platform before goal
-    { x: 2880, y: 480, width: 256, height: TILE_SIZE, tileType: 'platform' },
+    platformRect(1792, 560, 160),
+    platformRect(2048, 520, 160),
+    GOAL_PLAT,
   ],
 
-  spawnPoints: [
-    { x: 48,  y: PLAYER_ON_FLOOR },
-    { x: 112, y: PLAYER_ON_FLOOR },
-    { x: 176, y: PLAYER_ON_FLOOR },
-    { x: 240, y: PLAYER_ON_FLOOR },
-  ],
+  spawnPoints: standardSpawns(),
 
   objects: [
     // Section 1 — four latching floor buttons (AND logic: all four must be pressed)
-    { id: 'btn15a', type: 'button', x: 192, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
-    { id: 'btn15b', type: 'button', x: 320, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
-    { id: 'btn15c', type: 'button', x: 448, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
-    { id: 'btn15d', type: 'button', x: 576, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15a', latching: true },
-    {
-      id: 'door15a',
-      type: 'door',
-      x: 768,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
+    floorButton('btn15a', 192, 'door15a', { latching: true }),
+    floorButton('btn15b', 320, 'door15a', { latching: true }),
+    floorButton('btn15c', 448, 'door15a', { latching: true }),
+    floorButton('btn15d', 576, 'door15a', { latching: true }),
+    fullHeightDoor('door15a', 768),
     // Section 2 — 3-stack latching button
-    {
-      id: 'btn15e',
-      type: 'button',
-      x: 1248,
-      y: 370 - TILE_SIZE / 2,
-      width: 192,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door15b',
-      latching: true,
-    },
-    {
-      id: 'door15b',
-      type: 'door',
-      x: 1472,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: 'btn15e',
-    },
-    // Section 3 — relay
-    {
-      id: 'btn15f',
-      type: 'button',
-      x: 1664,
-      y: PLAYER_ON_FLOOR,
-      width: TILE_SIZE,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door15c',
-    },
-    {
-      id: 'btn15g',
-      type: 'button',
-      x: 2240,
-      y: PLAYER_ON_FLOOR,
-      width: TILE_SIZE,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door15c',
-      latching: true,
-    },
-    {
-      id: 'door15c',
-      type: 'door',
-      x: 2432,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
+    platformButton('btn15e', STACK3_PLAT, 'door15b', { latching: true }),
+    fullHeightDoor('door15b', 1472),
+    // Section 3 — relay (holder + latcher)
+    floorButton('btn15f', 1664, 'door15c'),
+    floorButton('btn15g', 2240, 'door15c', { latching: true }),
+    fullHeightDoor('door15c', 2432),
     // Section 4 — four latching floor buttons (AND logic)
-    { id: 'btn15h', type: 'button', x: 2624, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
-    { id: 'btn15i', type: 'button', x: 2688, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
-    { id: 'btn15j', type: 'button', x: 2752, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
-    { id: 'btn15k', type: 'button', x: 2816, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: 8, requiredPlayers: 1, linkedId: 'door15d', latching: true },
-    {
-      id: 'door15d',
-      type: 'door',
-      x: 3008,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
-    {
-      id: 'goal15',
-      type: 'goal',
-      x: 3008,
-      y: 480 - TILE_SIZE / 2,
-      width: TILE_SIZE,
-      height: TILE_SIZE,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
+    floorButton('btn15h', 2624, 'door15d', { latching: true }),
+    floorButton('btn15i', 2688, 'door15d', { latching: true }),
+    floorButton('btn15j', 2752, 'door15d', { latching: true }),
+    floorButton('btn15k', 2816, 'door15d', { latching: true }),
+    fullHeightDoor('door15d', 3008),
+    goalOnPlatform('goal15', GOAL_PLAT),
   ],
 };
