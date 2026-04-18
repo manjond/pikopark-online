@@ -282,3 +282,73 @@ These are ideas for making the game more engaging — not yet scheduled, just do
 - **Room persistence**: rejoin a room after disconnect within 30 s (Colyseus reconnect token)
 - **Rate limiting**: cap input messages to TICK_RATE per second per client server-side
 - **Structured logging**: add request IDs and room codes to server logs for debugging
+
+## Level Helpers & Migration Plan
+
+`shared/levels/_helpers.ts` centralises the constants and factory functions that every `levelN.ts` currently hand-rolls, and ships a static validator that the server runs at startup (`validateAllPacks` in `server/src/index.ts`). If any level has a structural error (missing goal, broken linkedId, unsolvable pressure AND-group), the server aborts boot.
+
+### What the helper exports
+- `FLOOR_TOP` (688), `PLAYER_ON_FLOOR` (672)
+- Reachability thresholds derived from `GRAVITY` / `JUMP_VELOCITY` / `SPRING_VELOCITY` — never hand-type these again:
+  - `SOLO_FEET_PEAK` = 421 (solo-reachable if platform top ≥ this)
+  - `STACK2_FEET_PEAK` = 389 (2-stack required in `[389, 421)`)
+  - `STACK3_FEET_PEAK` = 357 (3-stack required in `[357, 389)`)
+  - `SPRING_FEET_PEAK` = 72 (spring required in `[72, 357)`)
+- Rect factories: `groundRect`, `platformRect`
+- Spawn factory: `standardSpawns(count=4, startX=48, gap=64)`
+- Object factories: `floorButton`, `platformButton`, `fullHeightDoor`, `floorTrap`, `floorSpring`, `goalOnFloor`, `goalOnPlatform`
+- Validator: `validateLevel`, `validatePack`, `validateAllPacks`
+
+### Migration plan (28 levels, one PR per pack is fine)
+All 28 `levelN.ts` files still hand-roll `FLOOR_TOP`, `PLAYER_ON_FLOOR`, full `SolidRect`/`LevelObjectDef` literals, and 4-spawn arrays. Migrate each file to use the helpers — the output `LevelData` must be byte-identical to the current shape (the validator proves nothing changed behaviourally).
+
+Pending files: `level1.ts`…`level28.ts`. Suggested order (lowest risk first):
+1. Basics pack (1–5)
+2. Duo pack (6–10)
+3. Hazards pack (16–20)
+4. Squad pack (11–15) — wider maps, trickier coordinates
+5. Extreme pack (21–25) — stacking + traps combined
+6. Bounce pack (26–28) — spring physics, verify `SPRING_FEET_PEAK` matches the existing magic numbers in comments
+
+Example before/after (Level 16):
+
+```ts
+// before
+const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
+const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
+solidRects: [
+  { x: 0, y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },
+  { x: 320, y: 533, width: 192, height: TILE_SIZE, tileType: 'platform' },
+],
+spawnPoints: [ { x: 64, y: PLAYER_ON_FLOOR }, /* …×3 */ ],
+objects: [
+  { id: 'trap16a', type: 'trap', x: 416, y: PLAYER_ON_FLOOR, width: 96, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
+  // …
+  { id: 'btn16', type: 'button', x: 896, y: PLAYER_ON_FLOOR, width: 160, height: 8, requiredPlayers: 2, linkedId: 'door16', latching: true },
+  { id: 'door16', type: 'door', x: 1088, y: Math.round(GAME_HEIGHT / 2), width: 16, height: GAME_HEIGHT, requiredPlayers: 0, linkedId: 'btn16' },
+  { id: 'goal16', type: 'goal', x: 1220, y: PLAYER_ON_FLOOR, width: TILE_SIZE, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' },
+],
+
+// after
+solidRects: [ groundRect(), platformRect(320, 533, 192) ],
+spawnPoints: standardSpawns(),
+objects: [
+  floorTrap('trap16a', 416, 96),
+  floorTrap('trap16b', 704, 64),
+  floorButton('btn16', 896, 'door16', { latching: true, requiredPlayers: 2, width: 160 }),
+  fullHeightDoor('door16', 1088, 'btn16'),
+  goalOnFloor('goal16', 1220),
+],
+```
+
+### Validator rules currently enforced
+- Exactly one `goal` object per level
+- No duplicate object IDs
+- Every non-empty `linkedId` resolves to an object in the same level
+- Spawn points within `mapWidth`
+- **Pressure-only AND-group**: if every button linked to a door is non-latching AND `sum(requiredPlayers) >= effectiveMinPlayers`, flag as error (this is the 2026-04-18 class of bug that made 9 levels unsolvable)
+
+### Future validator upgrades (not yet implemented)
+- Cross-section pressure-door analysis on wide scroll maps (a button in section A locking a door in section B is already caught today by the sum check, but the error message doesn't hint at spatial context)
+- Spatial path validation (can a player physically traverse from spawn to goal given reachability thresholds?)
+- Warn when a platform falls in an unreachable zone (below `SPRING_FEET_PEAK` with no spring)

@@ -3,7 +3,7 @@ import express from 'express';
 import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { GameRoom } from './rooms/GameRoom';
-import { SERVER_PORT } from '@pikopark/shared';
+import { ALL_PACKS, SERVER_PORT, validateAllPacks } from '@pikopark/shared';
 
 const app = express();
 app.use(express.json());
@@ -22,6 +22,13 @@ const gameServer = new Server({
 gameServer.define('game_room', GameRoom);
 
 const port = Number(process.env['PORT'] ?? SERVER_PORT);
+
+const validationIssues = validateAllPacks(ALL_PACKS);
+const fatal = validationIssues.filter(i => i.severity === 'error');
+if (fatal.length > 0) {
+  console.error(`[Colyseus] ${fatal.length} level validation error(s) — aborting startup.`);
+  process.exit(1);
+}
 
 httpServer.listen(port, () => {
   console.log(`[Colyseus] Listening on ws://localhost:${port}`);
