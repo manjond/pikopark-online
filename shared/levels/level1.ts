@@ -1,9 +1,22 @@
+import { TILE_SIZE } from '../constants';
 import { LevelData } from '../level';
-import { GAME_WIDTH, GAME_HEIGHT, TILE_SIZE } from '../constants';
+import {
+  floorButton,
+  fullHeightDoor,
+  groundRect,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
-// Layout at 1280×720 (scaled from 480×270 by ×8/3)
-const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;           // 688
-const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // 672
+// Level 1 — "First Steps"  (Pack: Basics, 1 player)
+// Three ascending platforms. Press the floor button to open the door, then
+// climb the chain of platforms to reach the goal on the highest one.
+//
+// Physics (1280×720):
+//   Solo feet peak 421 → platforms at y=565/472 are solo-reachable.
+//   Goal platform top 365 < 421, but reachable from the mid platform at 472.
+
+const GOAL_PLAT = platformRect(981, 365, 213);
 
 export const LEVEL_1: LevelData = {
   id: 1,
@@ -11,48 +24,23 @@ export const LEVEL_1: LevelData = {
   minPlayers: 1,
 
   solidRects: [
-    { x: 0,   y: FLOOR_TOP, width: GAME_WIDTH, height: TILE_SIZE, tileType: 'ground' },
-    // Low platform — reachable from ground (solo peak y=421, platform top y=565)
-    { x: 128,  y: 565, width: 299, height: TILE_SIZE, tileType: 'platform' },
-    // Mid platform — reachable from low platform
-    { x: 597,  y: 472, width: 299, height: TILE_SIZE, tileType: 'platform' },
-    // Goal platform — reachable from mid platform only (top y=365 < solo-peak y=421 → unreachable from ground)
-    { x: 981,  y: 365, width: 213, height: TILE_SIZE, tileType: 'platform' },
+    groundRect(),
+    platformRect(128, 565, 299),
+    platformRect(597, 472, 299),
+    GOAL_PLAT,
   ],
 
-  spawnPoints: [
-    { x: 21,  y: PLAYER_ON_FLOOR },
-    { x: 85,  y: PLAYER_ON_FLOOR },
-    { x: 149, y: PLAYER_ON_FLOOR },
-    { x: 213, y: PLAYER_ON_FLOOR },
-  ],
+  spawnPoints: standardSpawns(4, 21, 64),
 
   objects: [
-    {
-      id: 'btn1',
-      type: 'button',
-      x: 299,
-      y: PLAYER_ON_FLOOR,
-      width: TILE_SIZE,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door1',
-    },
-    {
-      id: 'door1',
-      type: 'door',
-      x: 512,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: 'btn1',
-    },
+    floorButton('btn1', 299, 'door1'),
+    fullHeightDoor('door1', 512, 'btn1'),
+    // Goal x=1088 is the original hand-set value (platform center is 1087.5).
     {
       id: 'goal1',
       type: 'goal',
       x: 1088,
-      y: 365 - TILE_SIZE / 2,  // 349 — player center when standing on goal platform
+      y: GOAL_PLAT.y - TILE_SIZE / 2,
       width: TILE_SIZE,
       height: TILE_SIZE,
       requiredPlayers: 0,

@@ -1,5 +1,13 @@
 import { LevelData } from '../level';
-import { GAME_HEIGHT, TILE_SIZE } from '../constants';
+import {
+  floorButton,
+  fullHeightDoor,
+  goalOnPlatform,
+  groundRect,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
 // Level 10 — "Pinnacle"  (Pack: Duo, 2 players — hardest)
 // 1920px wide. Combines all duo mechanics in one continuous puzzle:
@@ -7,16 +15,14 @@ import { GAME_HEIGHT, TILE_SIZE } from '../constants';
 //   • Floor button B (latching) unlocks door B
 //   • Beyond door B: stacking-only platform with latching button C
 //   • All three doors open → goal reachable
-//
-// Flow: Stack → btn10a latches. Either player presses btn10b (latches).
-//       Stack again for btn10c (latches). door10c opens. Both reach goal.
 // All buttons latching so the 2-player session can always complete — if any
 // were pressure-only the holder would get stuck before the next puzzle.
 
-const FLOOR_TOP       = GAME_HEIGHT - TILE_SIZE;
-const PLAYER_ON_FLOOR = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2;
-
 const MAP_W = 1920;
+
+const PLAT_A    = platformRect(192,  405, 160); // stacking-only
+const PLAT_C    = platformRect(1344, 395, 160); // stacking-only
+const GOAL_PLAT = platformRect(1664, 480, 192);
 
 export const LEVEL_10: LevelData = {
   id: 10,
@@ -25,100 +31,22 @@ export const LEVEL_10: LevelData = {
   mapWidth: MAP_W,
 
   solidRects: [
-    { x: 0, y: FLOOR_TOP, width: MAP_W, height: TILE_SIZE, tileType: 'ground' },
-    // Stacking platform A — latching btn unlocks first door
-    { x: 192, y: 405, width: 160, height: TILE_SIZE, tileType: 'platform' },
-    // Stepping stone between door A and B
-    { x: 640, y: 550, width: 160, height: TILE_SIZE, tileType: 'platform' },
-    // Stacking platform C — final latching btn
-    { x: 1344, y: 395, width: 160, height: TILE_SIZE, tileType: 'platform' },
-    // Goal platform
-    { x: 1664, y: 480, width: 192, height: TILE_SIZE, tileType: 'platform' },
+    groundRect(MAP_W),
+    PLAT_A,
+    platformRect(640, 550, 160),   // stepping stone between door A and B
+    PLAT_C,
+    GOAL_PLAT,
   ],
 
-  spawnPoints: [
-    { x: 48,  y: PLAYER_ON_FLOOR },
-    { x: 112, y: PLAYER_ON_FLOOR },
-    { x: 176, y: PLAYER_ON_FLOOR },
-    { x: 240, y: PLAYER_ON_FLOOR },
-  ],
+  spawnPoints: standardSpawns(),
 
   objects: [
-    // Stacking button A (latching) — both players stack to reach it
-    {
-      id: 'btn10a',
-      type: 'button',
-      x: 272,
-      y: 405 - TILE_SIZE / 2,
-      width: 160,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door10a',
-      latching: true,
-    },
-    {
-      id: 'door10a',
-      type: 'door',
-      x: 448,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: 'btn10a',
-    },
-    // Floor button B (latching — either player can press and continue)
-    {
-      id: 'btn10b',
-      type: 'button',
-      x: 832,
-      y: PLAYER_ON_FLOOR,
-      width: TILE_SIZE,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door10b',
-      latching: true,
-    },
-    {
-      id: 'door10b',
-      type: 'door',
-      x: 1024,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: 'btn10b',
-    },
-    // Stacking button C (latching) — second stack puzzle
-    {
-      id: 'btn10c',
-      type: 'button',
-      x: 1424,
-      y: 395 - TILE_SIZE / 2,
-      width: 160,
-      height: 8,
-      requiredPlayers: 1,
-      linkedId: 'door10c',
-      latching: true,
-    },
-    {
-      id: 'door10c',
-      type: 'door',
-      x: 1600,
-      y: Math.round(GAME_HEIGHT / 2),
-      width: 16,
-      height: GAME_HEIGHT,
-      requiredPlayers: 0,
-      linkedId: 'btn10c',
-    },
-    {
-      id: 'goal10',
-      type: 'goal',
-      x: 1760,
-      y: 480 - TILE_SIZE / 2,
-      width: TILE_SIZE,
-      height: TILE_SIZE,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
+    platformButton('btn10a', PLAT_A, 'door10a', { latching: true }),
+    fullHeightDoor('door10a', 448, 'btn10a'),
+    floorButton('btn10b', 832, 'door10b', { latching: true }),
+    fullHeightDoor('door10b', 1024, 'btn10b'),
+    platformButton('btn10c', PLAT_C, 'door10c', { latching: true }),
+    fullHeightDoor('door10c', 1600, 'btn10c'),
+    goalOnPlatform('goal10', GOAL_PLAT),
   ],
 };

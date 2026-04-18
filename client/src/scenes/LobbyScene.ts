@@ -45,7 +45,20 @@ export class LobbyScene extends Phaser.Scene {
   private packInfoText!: Phaser.GameObjects.Text;
   private packErrorText!: Phaser.GameObjects.Text;
   private packHeaderText!: Phaser.GameObjects.Text;
+  private packScrollBar?: Phaser.GameObjects.Rectangle;
   private selectedPackId = 'basics';
+
+  // ── Pack grid layout + scroll state ───────────────────────────────────────
+  private readonly PACK_COLS = 3;
+  private readonly PACK_CARD_W = 224;
+  private readonly PACK_CARD_H = 84;
+  private readonly PACK_GAP = 14;
+  private PACK_VISIBLE_TOP = 62;
+  private PACK_VISIBLE_H = 250;
+  private PACK_MASK_X = 0;
+  private PACK_MASK_W = 0;
+  private packContentHeight = 0;
+  private packScrollY = 0;
 
   private playerListContainer!: Phaser.GameObjects.Container;
   private playerCountText!: Phaser.GameObjects.Text;
@@ -163,7 +176,31 @@ export class LobbyScene extends Phaser.Scene {
 
     this.add.rectangle(rx, 52, chatW - 40, 2, 0x333355);
 
-    this.packButtonContainer = this.add.container(this.SPLIT + 20, 72);
+    // Pack scrollable grid — mask clips overflow, wheel scrolls contents.
+    this.PACK_MASK_X = this.SPLIT + 20;
+    this.PACK_MASK_W = chatW - 40;
+    this.PACK_VISIBLE_H = this.RIGHT_SPLIT_Y - this.PACK_VISIBLE_TOP - 50;
+
+    this.packButtonContainer = this.add.container(this.PACK_MASK_X, this.PACK_VISIBLE_TOP);
+
+    const maskShape = this.make.graphics({}, false);
+    maskShape.fillStyle(0xffffff);
+    maskShape.fillRect(this.PACK_MASK_X, this.PACK_VISIBLE_TOP, this.PACK_MASK_W, this.PACK_VISIBLE_H);
+    this.packButtonContainer.setMask(new Phaser.Display.Masks.GeometryMask(this, maskShape));
+
+    this.packScrollBar = this.add.rectangle(
+      this.PACK_MASK_X + this.PACK_MASK_W - 4, this.PACK_VISIBLE_TOP,
+      3, this.PACK_VISIBLE_H, 0x444466,
+    ).setOrigin(0, 0).setVisible(false);
+
+    this.input.on('wheel', (pointer: Phaser.Input.Pointer, _gos: unknown, _dx: number, dy: number) => {
+      if (!this.isPointerInPackArea(pointer)) return;
+      const overflow = this.packContentHeight - this.PACK_VISIBLE_H;
+      if (overflow <= 0) return;
+      this.packScrollY = Phaser.Math.Clamp(this.packScrollY + dy * 0.5, 0, overflow);
+      this.packButtonContainer.y = this.PACK_VISIBLE_TOP - this.packScrollY;
+      this.updatePackScrollBar();
+    });
 
     this.packInfoText = this.add.text(rx, this.RIGHT_SPLIT_Y - 44, '', {
       ...FONT, fontSize: '10px', color: '#888888',
@@ -254,54 +291,104 @@ export class LobbyScene extends Phaser.Scene {
     });
   }
 
-  // ── Pack list (right-top panel) ───────────────────────────────────────────
+  // ── Pack grid (right-top panel) ───────────────────────────────────────────
+
+  private isPointerInPackArea(pointer: Phaser.Input.Pointer): boolean {
+    return pointer.x >= this.PACK_MASK_X
+      && pointer.x <= this.PACK_MASK_X + this.PACK_MASK_W
+      && pointer.y >= this.PACK_VISIBLE_TOP
+      && pointer.y <= this.PACK_VISIBLE_TOP + this.PACK_VISIBLE_H;
+  }
+
+  private updatePackScrollBar(): void {
+    if (!this.packScrollBar) return;
+    const overflow = this.packContentHeight - this.PACK_VISIBLE_H;
+    if (overflow <= 0) {
+      this.packScrollBar.setVisible(false);
+      return;
+    }
+    const ratio = this.PACK_VISIBLE_H / this.packContentHeight;
+    const barH = Math.max(20, this.PACK_VISIBLE_H * ratio);
+    const travel = this.PACK_VISIBLE_H - barH;
+    const scrollFrac = overflow > 0 ? this.packScrollY / overflow : 0;
+    this.packScrollBar.setVisible(true);
+    this.packScrollBar.height = barH;
+    this.packScrollBar.y = this.PACK_VISIBLE_TOP + scrollFrac * travel;
+  }
 
   private rebuildPackList(): void {
     this.packButtonContainer.removeAll(true);
-    const chatW = this.cameras.main.width - this.SPLIT;
-    const centerX = (chatW - 40) / 2;  // centred inside container
+    this.packScrollY = 0;
+    this.packButtonContainer.y = this.PACK_VISIBLE_TOP;
 
-    // Update header with selected category label
+    const gridW = this.PACK_COLS * this.PACK_CARD_W + (this.PACK_COLS - 1) * this.PACK_GAP;
+    const gridOffsetX = Math.max(0, Math.floor((this.PACK_MASK_W - gridW) / 2));
+
     const catLabel = CATEGORIES.find((c) => c.minPlayers === this.selectedCategory)?.label ?? '';
     this.packHeaderText.setText(`PACKS — ${catLabel}`);
 
     const visiblePacks = ALL_PACKS.filter((p) => p.minPlayers === this.selectedCategory);
 
     if (visiblePacks.length === 0) {
-      const empty = this.add.text(centerX, 40, '(no packs for this category)', {
+      const empty = this.add.text(this.PACK_MASK_W / 2, 40, '(no packs for this category)', {
         ...FONT, fontSize: '10px', color: '#555555',
       }).setOrigin(0.5);
       this.packButtonContainer.add(empty);
+      this.packContentHeight = 0;
+      this.updatePackScrollBar();
       return;
     }
 
     visiblePacks.forEach((pack, i) => {
-      const rowY = i * 52;
+      const col = i % this.PACK_COLS;
+      const row = Math.floor(i / this.PACK_COLS);
+      const x = gridOffsetX + col * (this.PACK_CARD_W + this.PACK_GAP);
+      const y = row * (this.PACK_CARD_H + this.PACK_GAP);
       const isSelected = pack.id === this.selectedPackId;
-      const color = isSelected ? '#00ff88' : '#888888';
 
-      const nameText = this.add.text(centerX, rowY + 14, pack.name, {
-        ...FONT, fontSize: '18px', color,
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      const fill   = isSelected ? 0x1a3d2a : 0x1a1f2e;
+      const hover  = 0x242b3d;
+      const border = isSelected ? 0x00ff88 : 0x333355;
 
-      const info = `${pack.levels.length} levels • ${pack.minPlayers}+ players`;
-      const infoText = this.add.text(centerX, rowY + 36, info, {
-        ...FONT, fontSize: '9px', color: isSelected ? '#77dd99' : '#555555',
+      const card = this.add.rectangle(x, y, this.PACK_CARD_W, this.PACK_CARD_H, fill)
+        .setOrigin(0, 0)
+        .setStrokeStyle(2, border)
+        .setInteractive({ useHandCursor: true });
+
+      const nameText = this.add.text(x + this.PACK_CARD_W / 2, y + 28, pack.name, {
+        ...FONT, fontSize: '15px', color: isSelected ? '#00ff88' : '#dddddd',
       }).setOrigin(0.5);
 
-      nameText.on('pointerover', () => {
-        if (pack.id !== this.selectedPackId) nameText.setColor('#ffffff');
+      const info = `${pack.levels.length} levels • ${pack.minPlayers}+ players`;
+      const infoText = this.add.text(x + this.PACK_CARD_W / 2, y + 58, info, {
+        ...FONT, fontSize: '8px', color: isSelected ? '#77dd99' : '#777777',
+      }).setOrigin(0.5);
+
+      card.on('pointerover', (pointer: Phaser.Input.Pointer) => {
+        if (!this.isPointerInPackArea(pointer)) return;
+        if (!isSelected) {
+          card.setFillStyle(hover);
+          nameText.setColor('#ffffff');
+        }
       });
-      nameText.on('pointerout', () => {
-        if (pack.id !== this.selectedPackId) nameText.setColor('#888888');
+      card.on('pointerout', () => {
+        if (!isSelected) {
+          card.setFillStyle(fill);
+          nameText.setColor('#dddddd');
+        }
       });
-      nameText.on('pointerdown', () => {
+      card.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+        if (!this.isPointerInPackArea(pointer)) return;
         if (!this.isHost) return;
         this.room.send('selectPack', { packId: pack.id });
       });
 
-      this.packButtonContainer.add([nameText, infoText]);
+      this.packButtonContainer.add([card, nameText, infoText]);
     });
+
+    const rows = Math.ceil(visiblePacks.length / this.PACK_COLS);
+    this.packContentHeight = rows * this.PACK_CARD_H + Math.max(0, rows - 1) * this.PACK_GAP;
+    this.updatePackScrollBar();
   }
 
   // ── Player list ───────────────────────────────────────────────────────────
