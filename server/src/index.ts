@@ -3,13 +3,38 @@ import express from 'express';
 import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { GameRoom } from './rooms/GameRoom';
+import { leaderboardInstance } from './leaderboard/Leaderboard';
 import { ALL_PACKS, SERVER_PORT, validateAllPacks } from '@pikopark/shared';
 
 const app = express();
 app.use(express.json());
 
+// Basic CORS for the leaderboard JSON endpoint. Colyseus handles its own
+// CORS for /matchmake/*; we mirror the permissive origin for /leaderboard
+// so the Vite dev server and the Vercel-hosted client can both fetch.
+app.use('/leaderboard', (_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  next();
+});
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0', built: new Date().toISOString() });
+});
+
+const leaderboard = leaderboardInstance();
+
+app.get('/leaderboard', (_req, res) => {
+  res.json({ version: 1, levels: leaderboard.getAll() });
+});
+
+app.get('/leaderboard/:levelId', (req, res) => {
+  const id = Number(req.params['levelId']);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ error: 'levelId must be a number' });
+    return;
+  }
+  res.json({ levelId: id, top: leaderboard.getTop(id) });
 });
 
 const httpServer = createServer(app);
@@ -30,6 +55,11 @@ if (fatal.length > 0) {
   process.exit(1);
 }
 
-httpServer.listen(port, () => {
-  console.log(`[Colyseus] Listening on ws://localhost:${port}`);
-});
+async function boot(): Promise<void> {
+  await leaderboard.load();
+  httpServer.listen(port, () => {
+    console.log(`[Colyseus] Listening on ws://localhost:${port}`);
+  });
+}
+
+void boot();

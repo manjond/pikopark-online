@@ -6,6 +6,7 @@ import { PLAYER_COLORS, ALL_PACKS } from '@pikopark/shared';
 interface LobbyData {
   room: Room;
   network: ColyseusClient;
+  isSpectator?: boolean;
 }
 
 interface ChatMessage {
@@ -17,6 +18,11 @@ interface LobbyPlayer {
   id: string;
   name: string;
   color: number;
+}
+
+interface LobbySpectator {
+  id: string;
+  name: string;
 }
 
 const FONT = { fontFamily: '"Press Start 2P"' };
@@ -66,7 +72,9 @@ export class LobbyScene extends Phaser.Scene {
 
   // ── Player roster from server ─────────────────────────────────────────────
   private lobbyPlayers: LobbyPlayer[] = [];
+  private lobbySpectators: LobbySpectator[] = [];
   private isHost = false;
+  private isSpectator = false;
 
   // ── Right panel — chat ────────────────────────────────────────────────────
   private chatMessages: ChatMessage[] = [];
@@ -85,6 +93,7 @@ export class LobbyScene extends Phaser.Scene {
   init(data: LobbyData): void {
     this.room = data.room;
     this.network = data.network;
+    this.isSpectator = data.isSpectator === true;
   }
 
   create(): void {
@@ -169,6 +178,16 @@ export class LobbyScene extends Phaser.Scene {
       this.scene.start('MenuScene');
     });
 
+    // Spectator badge — shown in lieu of the pack/start controls when watching.
+    if (this.isSpectator) {
+      this.add.text(lx, H - 76, 'SPECTATING', {
+        ...FONT, fontSize: '18px', color: '#ff99ee',
+      }).setOrigin(0.5);
+      this.add.text(lx, H - 50, 'waiting for host to start', {
+        ...FONT, fontSize: '9px', color: '#666666',
+      }).setOrigin(0.5);
+    }
+
     // ── Right-top panel: PACKS ────────────────────────────────────────────────
     this.packHeaderText = this.add.text(rx, 26, 'PACKS — 1+ PLAYER', {
       ...FONT, fontSize: '16px', color: '#ffffff',
@@ -240,10 +259,12 @@ export class LobbyScene extends Phaser.Scene {
       this.roomCodeText.setText(`CODE: ${data.code}`);
     });
 
-    this.room.onMessage('playerList', (data: { players: LobbyPlayer[]; hostId: string }) => {
+    this.room.onMessage('playerList', (data: { players: LobbyPlayer[]; spectators?: LobbySpectator[]; hostId: string }) => {
       if (!this.scene.isActive('LobbyScene')) return;
       this.lobbyPlayers = data.players;
-      this.isHost = data.hostId === this.room.sessionId;
+      this.lobbySpectators = data.spectators ?? [];
+      // Spectators are never host, even if they somehow match the hostId.
+      this.isHost = !this.isSpectator && data.hostId === this.room.sessionId;
       this.startButton.setVisible(this.isHost);
       this.rebuildPlayerList();
     });
@@ -252,6 +273,7 @@ export class LobbyScene extends Phaser.Scene {
       this.scene.start('GameScene', {
         room: this.room,
         network: this.network,
+        isSpectator: this.isSpectator,
         packId: data.packId ?? this.selectedPackId,
         levelId: data.levelId,
         mapWidth: data.mapWidth,
@@ -397,19 +419,38 @@ export class LobbyScene extends Phaser.Scene {
     this.playerListContainer.removeAll(true);
 
     this.lobbyPlayers.forEach((player, index) => {
-      const rowY = index * 32;
+      const rowY = index * 28;
       const dotColor = PLAYER_COLORS[player.color] ?? 0xffffff;
-      const dot = this.add.rectangle(6, rowY + 8, 18, 18, dotColor);
+      const dot = this.add.rectangle(6, rowY + 8, 16, 16, dotColor);
       const isMe = player.id === this.room.sessionId;
       const isHostPlayer = this.isHost && isMe;
       let label = isMe ? `${player.name} (you)` : player.name;
       if (isHostPlayer) label += ' [HOST]';
-      const nameText = this.add.text(28, rowY + 8, label, {
-        ...FONT, fontSize: '12px',
+      const nameText = this.add.text(26, rowY + 8, label, {
+        ...FONT, fontSize: '11px',
         color: isMe ? '#ffffff' : '#aaaaaa',
       }).setOrigin(0, 0.5);
       this.playerListContainer.add([dot, nameText]);
     });
+
+    // Spectators section — tiny row under the player list.
+    if (this.lobbySpectators.length > 0) {
+      const baseY = this.lobbyPlayers.length * 28 + 8;
+      const header = this.add.text(6, baseY, `WATCHING (${this.lobbySpectators.length})`, {
+        ...FONT, fontSize: '9px', color: '#ff99ee',
+      }).setOrigin(0, 0);
+      this.playerListContainer.add(header);
+
+      this.lobbySpectators.forEach((s, i) => {
+        const rowY = baseY + 18 + i * 18;
+        const isMe = s.id === this.room.sessionId;
+        const label = isMe ? `${s.name} (you)` : s.name;
+        const t = this.add.text(20, rowY, label, {
+          ...FONT, fontSize: '9px', color: isMe ? '#ffffff' : '#888888',
+        }).setOrigin(0, 0);
+        this.playerListContainer.add(t);
+      });
+    }
 
     this.playerCountText.setText(`${this.lobbyPlayers.length} / 8 players`);
   }

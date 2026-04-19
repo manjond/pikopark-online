@@ -29,6 +29,7 @@ interface GameSceneData {
   packId?: string;
   levelId?: number;
   mapWidth?: number;
+  isSpectator?: boolean;
 }
 
 interface PositionMsg {
@@ -99,6 +100,10 @@ export class GameScene extends Phaser.Scene {
   private initialLevelId: number | null = null;
   private initialMapWidth: number | null = null;
 
+  // ── Spectator mode ─────────────────────────────────────────────────────────
+  private isSpectator = false;
+  private spectatorCameraX = 0;
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -109,6 +114,7 @@ export class GameScene extends Phaser.Scene {
     this.initialPackId = data.packId ?? null;
     this.initialLevelId = data.levelId ?? null;
     this.initialMapWidth = data.mapWidth ?? null;
+    this.isSpectator = data.isSpectator === true;
   }
 
   create(): void {
@@ -158,7 +164,16 @@ export class GameScene extends Phaser.Scene {
 
     startBgMusic();
     this.levelStartTime = Date.now();
-    this.createTouchControls();
+
+    if (this.isSpectator) {
+      // Start camera at the map centre; will auto-follow once positions arrive.
+      this.spectatorCameraX = Math.min(GAME_WIDTH / 2, startMapWidth / 2);
+      this.add.text(GAME_WIDTH - 8, 8, 'SPECTATING', {
+        fontFamily: '"Press Start 2P"', fontSize: '10px', color: '#ff99ee',
+      }).setOrigin(1, 0).setScrollFactor(0).setDepth(40);
+    } else {
+      this.createTouchControls();
+    }
 
     // ── Connect ────────────────────────────────────────────────────────────
     if (this.preConnectedRoom !== null) {
@@ -176,7 +191,20 @@ export class GameScene extends Phaser.Scene {
   }
 
   update(_time: number, delta: number): void {
-    // ── Read inputs ────────────────────────────────────────────────────────
+    // ── Advance all player sprites (lerp toward server target) ────────────
+    this.players.forEach((p) => p.tick(delta));
+
+    // ── Parallax — drift cloud layers relative to camera scroll ────────────
+    const sx = this.cameras.main.scrollX;
+    if (this.parallaxFar)  this.parallaxFar.tilePositionX  = sx * 0.2;
+    if (this.parallaxNear) this.parallaxNear.tilePositionX = sx * 0.5;
+
+    if (this.isSpectator) {
+      this.updateSpectatorCamera(delta);
+      return;
+    }
+
+    // ── Read inputs (active players only) ──────────────────────────────────
     const jumpPressed =
       Phaser.Input.Keyboard.JustDown(this.cursors.up) ||
       Phaser.Input.Keyboard.JustDown(this.cursors.space) ||
@@ -186,9 +214,6 @@ export class GameScene extends Phaser.Scene {
 
     const movingLeft  = this.cursors.left.isDown  || this.wasd.left.isDown  || this.touchLeft;
     const movingRight = this.cursors.right.isDown || this.wasd.right.isDown || this.touchRight;
-
-    // ── Advance all player sprites (lerp toward server target) ────────────
-    this.players.forEach((p) => p.tick(delta));
 
     // ── Camera follows the local player ───────────────────────────────────
     if (this.localSessionId) {
@@ -201,11 +226,6 @@ export class GameScene extends Phaser.Scene {
       }
     }
 
-    // ── Parallax — drift cloud layers relative to camera scroll ────────────
-    const sx = this.cameras.main.scrollX;
-    if (this.parallaxFar)  this.parallaxFar.tilePositionX  = sx * 0.2;
-    if (this.parallaxNear) this.parallaxNear.tilePositionX = sx * 0.5;
-
     if (this.room === null) return;
 
     // ── Send input to server ───────────────────────────────────────────────
@@ -217,6 +237,37 @@ export class GameScene extends Phaser.Scene {
       sequence: this.inputSequence++,
     };
     this.room.send('input', input);
+  }
+
+  /**
+   * Spectator camera:
+   *  - Arrow keys / A / D → manual pan
+   *  - Otherwise auto-follows the first active player (keeps the action in frame)
+   */
+  private updateSpectatorCamera(delta: number): void {
+    const mw = this.physics.world.bounds.width || GAME_WIDTH;
+    const half = GAME_WIDTH / 2;
+    const clamp = (x: number) => Phaser.Math.Clamp(x, half, Math.max(half, mw - half));
+
+    const movingLeft  = this.cursors.left.isDown  || this.wasd.left.isDown  || this.touchLeft;
+    const movingRight = this.cursors.right.isDown || this.wasd.right.isDown || this.touchRight;
+
+    if (movingLeft || movingRight) {
+      const dir = (movingRight ? 1 : 0) - (movingLeft ? 1 : 0);
+      this.spectatorCameraX = clamp(this.spectatorCameraX + dir * 0.6 * delta);
+    } else {
+      // Auto-follow: center on the first (lowest-id) active player, if any.
+      const ids = Array.from(this.players.keys()).sort();
+      const firstId = ids[0];
+      const target = firstId ? this.players.get(firstId) : undefined;
+      if (target) {
+        this.spectatorCameraX = clamp(
+          Phaser.Math.Linear(this.spectatorCameraX, target.x, 0.08),
+        );
+      }
+    }
+
+    this.cameras.main.centerOn(this.spectatorCameraX, GAME_HEIGHT / 2);
   }
 
   // ─── Network ─────────────────────────────────────────────────────────────────
@@ -316,8 +367,18 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Level complete ─────────────────────────────────────────────────────
-    room.onMessage('levelComplete', (data: { playerName: string }) => {
-      this.showLevelComplete(data.playerName);
+    room.onMessage('levelComplete', (data: {
+      playerName: string;
+      timeMs?: number;
+      levelId?: number;
+      newRecordRank?: number | null;
+      top?: Array<{ timeMs: number; players: string[]; completedAt: string }>;
+    }) => {
+      this.showLevelComplete(
+        data.playerName,
+        data.top ?? [],
+        data.newRecordRank ?? null,
+      );
     });
 
     // ── Level transition ───────────────────────────────────────────────────
@@ -404,7 +465,11 @@ export class GameScene extends Phaser.Scene {
 
   // ─── Level complete overlay ───────────────────────────────────────────────────
 
-  private showLevelComplete(winnerName: string): void {
+  private showLevelComplete(
+    winnerName: string,
+    top: Array<{ timeMs: number; players: string[]; completedAt: string }>,
+    newRecordRank: number | null,
+  ): void {
     playLevelComplete();
 
     // Screen shake + particle burst at the goal for impact
@@ -416,32 +481,67 @@ export class GameScene extends Phaser.Scene {
     this.time.delayedCall(4400, () => this.cameras.main.fadeOut(600, 0, 0, 0));
 
     const elapsedMs = Date.now() - this.levelStartTime;
-    const totalSecs = Math.floor(elapsedMs / 1000);
-    const mins = Math.floor(totalSecs / 60);
-    const secs = totalSecs % 60;
-    const timeStr = `${mins}:${String(secs).padStart(2, '0')}`;
+    const timeStr = this.formatTime(elapsedMs);
 
     const cx = GAME_WIDTH / 2;
     const cy = GAME_HEIGHT / 2;
     const FONT = { fontFamily: '"Press Start 2P"' };
 
-    const sf = { scrollFactorX: 0, scrollFactorY: 0 };
-    const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.75).setDepth(20).setScrollFactor(0);
-    const t1 = this.add.text(cx, cy - 34, 'LEVEL COMPLETE!', {
-      ...FONT, fontSize: '10px', color: '#ffd700',
+    const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.78).setDepth(20).setScrollFactor(0);
+    const t1 = this.add.text(cx, cy - 140, 'LEVEL COMPLETE!', {
+      ...FONT, fontSize: '28px', color: '#ffd700',
     }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
-    const t2 = this.add.text(cx, cy - 12, `${winnerName} reached the goal`, {
-      ...FONT, fontSize: '6px', color: '#ffffff',
+    const t2 = this.add.text(cx, cy - 94, `${winnerName} reached the goal`, {
+      ...FONT, fontSize: '12px', color: '#ffffff',
     }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
-    const t3 = this.add.text(cx, cy + 4, `Time: ${timeStr}`, {
-      ...FONT, fontSize: '6px', color: '#00ff88',
+    const t3 = this.add.text(cx, cy - 68, `Time: ${timeStr}`, {
+      ...FONT, fontSize: '14px', color: '#00ff88',
     }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
-    const t4 = this.add.text(cx, cy + 20, 'Next level loading...', {
-      ...FONT, fontSize: '6px', color: '#888888',
-    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
-    void sf; // suppress unused warning
 
-    this.levelCompleteOverlay = [bg, t1, t2, t3, t4];
+    this.levelCompleteOverlay = [bg, t1, t2, t3];
+
+    if (newRecordRank !== null) {
+      const badge = this.add.text(cx, cy - 40, `NEW RECORD — RANK ${newRecordRank}`, {
+        ...FONT, fontSize: '14px', color: '#ffcc66',
+      }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+      this.tweens.add({ targets: badge, alpha: { from: 1, to: 0.4 }, yoyo: true, repeat: -1, duration: 500 });
+      this.levelCompleteOverlay.push(badge);
+    }
+
+    // Top 3 leaderboard entries for this level
+    const header = this.add.text(cx, cy + 0, 'TOP TIMES', {
+      ...FONT, fontSize: '12px', color: '#ffcc66',
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+    this.levelCompleteOverlay.push(header);
+
+    const medals = ['1st', '2nd', '3rd'];
+    top.slice(0, 3).forEach((entry, i) => {
+      const names = entry.players.slice(0, 2).join(', ') || '(anon)';
+      const line = this.add.text(cx, cy + 24 + i * 20, `${medals[i]}  ${this.formatTime(entry.timeMs)}  —  ${names}`, {
+        ...FONT, fontSize: '10px', color: i === 0 ? '#ffffff' : '#bbbbbb',
+      }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+      this.levelCompleteOverlay.push(line);
+    });
+
+    if (top.length === 0) {
+      const noData = this.add.text(cx, cy + 24, '(no times recorded yet)', {
+        ...FONT, fontSize: '9px', color: '#888888',
+      }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+      this.levelCompleteOverlay.push(noData);
+    }
+
+    const footer = this.add.text(cx, cy + 110, 'Next level loading...', {
+      ...FONT, fontSize: '9px', color: '#888888',
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+    this.levelCompleteOverlay.push(footer);
+  }
+
+  private formatTime(ms: number): string {
+    const totalSecs = Math.floor(ms / 1000);
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
+    const cs = Math.floor((ms % 1000) / 10);
+    return `${mins}:${String(secs).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
   }
 
   private ui(): UIScene | null {

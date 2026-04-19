@@ -2,6 +2,7 @@ import { Room, Client } from 'colyseus';
 import { GameState, ObjectState } from '../state/GameState';
 import { PlayerState } from '../state/Player';
 import { handlePlayerInput } from '../commands/PlayerCommands';
+import { Leaderboard, leaderboardInstance } from '../leaderboard/Leaderboard';
 import {
   InputMessage,
   MAX_PLAYERS,
@@ -23,8 +24,15 @@ const FLOOR_Y = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // player center when o
 /** Number of physics sub-steps per server tick — reduces tunnelling. */
 const SUBSTEPS = 3;
 
+/** Cap on spectators per room — they don't count against MAX_PLAYERS. */
+const MAX_SPECTATORS = 16;
+
+interface Spectator { id: string; name: string; }
+
 export class GameRoom extends Room<GameState> {
-  maxClients = MAX_PLAYERS;
+  // Allow up to MAX_PLAYERS active participants + MAX_SPECTATORS observers.
+  // We enforce the real split in onAuth/onJoin so the two pools stay separate.
+  maxClients = MAX_PLAYERS + MAX_SPECTATORS;
 
   private solidRects: SolidRect[] = [];
   private currentLevelIndex = 0;
@@ -39,9 +47,20 @@ export class GameRoom extends Room<GameState> {
   private gameStarted = false;
   private mapWidth = GAME_WIDTH; // current level's map width
 
+  // Spectators live outside state.players — they don't participate in physics,
+  // don't count toward minPlayers, can't host, can't press buttons. Keeping
+  // them in a separate map ensures no tick-loop iteration accidentally
+  // includes them and breaks the game logic.
+  private spectators = new Map<string, Spectator>();
+
+  // Level timer — set when a level loads, used by the leaderboard entry.
+  private levelStartMs = 0;
+
   /** Per-client input rate limiting: max messages per 1s window. */
   private readonly MAX_INPUTS_PER_SECOND = 120;
   private inputRates = new Map<string, { count: number; windowStart: number }>();
+
+  private leaderboard: Leaderboard = leaderboardInstance();
 
   onCreate(_options: Record<string, unknown>): void {
     this.setState(new GameState());
@@ -76,6 +95,7 @@ export class GameRoom extends Room<GameState> {
 
     this.onMessage('startGame', (client) => {
       if (client.sessionId !== this.hostId) return;
+      // minPlayers counts ACTIVE players only — spectators don't participate.
       const playerCount = this.state.players.size;
       if (playerCount < this.selectedPack.minPlayers) {
         client.send('startError', {
@@ -84,6 +104,8 @@ export class GameRoom extends Room<GameState> {
         return;
       }
       this.gameStarted = true;
+      // Timer for leaderboard — starts when the first level actually begins.
+      this.levelStartMs = Date.now();
       // Send the current level info so clients can render the correct first
       // level (not assume Basics L1). Prevents visual/physics desync when
       // the host selected Duo/Hazards/Squad/Extreme.
@@ -97,21 +119,75 @@ export class GameRoom extends Room<GameState> {
 
     this.onMessage<{ text: string }>('chat', (client, data) => {
       const player = this.state.players.get(client.sessionId);
-      const name = player?.name ?? 'Unknown';
+      const spectator = this.spectators.get(client.sessionId);
+      const name = player?.name ?? spectator?.name ?? 'Unknown';
       const text = String(data.text ?? '').slice(0, 80).trim();
-      if (text) this.broadcast('chat', { name, text });
+      if (text) this.broadcast('chat', { name, text, spectator: !!spectator });
     });
 
     this.setSimulationInterval((dt) => this.tick(dt), 1000 / TICK_RATE);
   }
 
   onJoin(client: Client, options: Record<string, unknown>): void {
+    const wantsSpectator = options['spectator'] === true;
+    // Once a game is running, block further active joins — late arrivals may
+    // only watch. Prevents mid-level spawns that would confuse physics and
+    // the minPlayers invariant.
+    const forceSpectator = this.gameStarted && !wantsSpectator;
+    const asSpectator = wantsSpectator || forceSpectator;
+
+    // Cap enforcement: players cap is MAX_PLAYERS; spectators cap is MAX_SPECTATORS.
+    if (asSpectator && this.spectators.size >= MAX_SPECTATORS) {
+      client.send('joinError', { message: 'Room full: too many spectators' });
+      client.leave();
+      return;
+    }
+    if (!asSpectator && this.state.players.size >= MAX_PLAYERS) {
+      client.send('joinError', { message: 'Room full: too many players' });
+      client.leave();
+      return;
+    }
+
+    const defaultName = asSpectator
+      ? `Spectator ${this.spectators.size + 1}`
+      : `Player ${this.state.players.size + 1}`;
+    const name = typeof options['name'] === 'string' ? options['name'] : defaultName;
+
+    client.send('roomCode', { code: this.state.roomCode, spectator: asSpectator });
+    client.send('packSelected', {
+      packId: this.selectedPack.id,
+      name: this.selectedPack.name,
+      minPlayers: this.selectedPack.minPlayers,
+    });
+
+    const objStates: Array<{ id: string; activated: boolean }> = [];
+    this.state.interactiveObjects.forEach((obj) => {
+      objStates.push({ id: obj.id, activated: obj.activated });
+    });
+    if (objStates.length > 0) client.send('objectStates', objStates);
+
+    if (asSpectator) {
+      this.spectators.set(client.sessionId, { id: client.sessionId, name });
+      this.broadcast('spectatorJoined', { name });
+
+      // Mid-game arrival: send them straight to the current level.
+      if (this.gameStarted) {
+        const lvl = this.selectedPack.levels[this.currentLevelIndex] ?? this.selectedPack.levels[0]!;
+        client.send('gameStart', {
+          packId: this.selectedPack.id,
+          levelId: lvl.id,
+          mapWidth: lvl.mapWidth ?? GAME_WIDTH,
+        });
+      }
+
+      this.broadcastPlayerList();
+      return;
+    }
+
+    // ── Active player join ──
     const player = new PlayerState();
     player.id = client.sessionId;
-    player.name =
-      typeof options['name'] === 'string'
-        ? options['name']
-        : `Player ${this.state.players.size + 1}`;
+    player.name = name;
     player.color = this.state.players.size % MAX_PLAYERS;
 
     const spawnIndex = this.state.players.size;
@@ -129,24 +205,17 @@ export class GameRoom extends Room<GameState> {
 
     if (this.hostId === '') this.hostId = client.sessionId;
 
-    client.send('roomCode', { code: this.state.roomCode });
-    client.send('packSelected', {
-      packId: this.selectedPack.id,
-      name: this.selectedPack.name,
-      minPlayers: this.selectedPack.minPlayers,
-    });
-
-    // Send current object states to the new joiner immediately
-    const objStates: Array<{ id: string; activated: boolean }> = [];
-    this.state.interactiveObjects.forEach((obj) => {
-      objStates.push({ id: obj.id, activated: obj.activated });
-    });
-    if (objStates.length > 0) client.send('objectStates', objStates);
-
     this.broadcastPlayerList();
   }
 
   onLeave(client: Client, _consented: boolean): void {
+    const spectator = this.spectators.get(client.sessionId);
+    if (spectator) {
+      this.spectators.delete(client.sessionId);
+      this.broadcast('spectatorLeft', { name: spectator.name });
+      this.broadcastPlayerList();
+      return;
+    }
     const player = this.state.players.get(client.sessionId);
     if (player) {
       this.broadcast('playerLeft', { name: player.name });
@@ -154,6 +223,7 @@ export class GameRoom extends Room<GameState> {
     }
     if (client.sessionId === this.hostId) {
       this.hostId = '';
+      // Host transfer only to another active player — never to a spectator.
       this.state.players.forEach((p) => { if (!this.hostId) this.hostId = p.id; });
     }
     this.inputRates.delete(client.sessionId);
@@ -206,6 +276,8 @@ export class GameRoom extends Room<GameState> {
       player.isGrounded = true;
       spawnIndex++;
     });
+
+    this.levelStartMs = Date.now();
 
     if (levelIndex > 0 || restart) {
       this.broadcast('levelStart', { levelId: levelData.id, mapWidth: this.mapWidth });
@@ -497,7 +569,27 @@ export class GameRoom extends Room<GameState> {
           const gBot   = obj.y + obj.height / 2;
           if (pRight > gLeft && pLeft < gRight && pBottom > gTop && pTop < gBot) {
             this.levelCompleted = true;
-            this.broadcast('levelComplete', { playerName: player.name });
+
+            // ── Leaderboard entry ────────────────────────────────────────────
+            const elapsedMs = Date.now() - this.levelStartMs;
+            const levelId = this.state.currentLevel;
+            const playerNames: string[] = [];
+            this.state.players.forEach((p) => playerNames.push(p.name));
+            const rank = this.leaderboard.tryInsert(levelId, {
+              timeMs: elapsedMs,
+              players: playerNames,
+              completedAt: new Date().toISOString(),
+            });
+            const top = this.leaderboard.getTop(levelId);
+
+            this.broadcast('levelComplete', {
+              playerName: player.name,
+              timeMs: elapsedMs,
+              levelId,
+              newRecordRank: rank,   // 1-based rank if in top, else null
+              top,
+            });
+
             const nextIndex = this.currentLevelIndex + 1;
             if (nextIndex < this.selectedPack.levels.length) {
               this.clock.setTimeout(() => { this.loadLevel(nextIndex); }, 5000);
@@ -568,7 +660,9 @@ export class GameRoom extends Room<GameState> {
   private broadcastPlayerList(): void {
     const players: Array<{ id: string; name: string; color: number }> = [];
     this.state.players.forEach((p) => players.push({ id: p.id, name: p.name, color: p.color }));
-    this.broadcast('playerList', { players, hostId: this.hostId });
+    const spectators: Array<{ id: string; name: string }> = [];
+    this.spectators.forEach((s) => spectators.push({ id: s.id, name: s.name }));
+    this.broadcast('playerList', { players, spectators, hostId: this.hostId });
   }
 
   private broadcastPackInfo(): void {
