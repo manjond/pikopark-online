@@ -10,13 +10,25 @@ export function handlePlayerInput(
   const player = state.players.get(client.sessionId);
   if (!player) return;
 
+  // Being carried: ignore all movement/jump input. Interact is still recorded
+  // (so the carried player could theoretically use it for future mechanics),
+  // but velocity is pinned to the carrier by the tick loop.
+  if (player.carriedBy) {
+    player.velocityX = 0;
+    player.animation = 'carried';
+    player.isInteracting = input.interact;
+    return;
+  }
+
   // Horizontal movement
   if (input.left) {
     player.velocityX = -MOVE_SPEED;
     player.animation = 'walk';
+    player.facing = -1;
   } else if (input.right) {
     player.velocityX = MOVE_SPEED;
     player.animation = 'walk';
+    player.facing = 1;
   } else {
     player.velocityX = 0;
     player.animation = 'idle';

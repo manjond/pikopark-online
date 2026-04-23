@@ -18,10 +18,11 @@ import {
   GAME_WIDTH,
   GRAVITY,
   JUMP_VELOCITY,
+  MOVE_SPEED,
   SPRING_VELOCITY,
   TILE_SIZE,
 } from '../constants';
-import type { LevelData, LevelObjectDef, LevelPack, SolidRect, SpawnPoint } from '../level';
+import type { LevelData, LevelObjectDef, LevelPack, PlatformMotion, SolidRect, SpawnPoint } from '../level';
 
 // ─── Core Y-coordinates ───────────────────────────────────────────────────────
 
@@ -61,6 +62,28 @@ export const STACK3_FEET_PEAK = Math.round(
 export const SPRING_FEET_PEAK = Math.round(
   (FLOOR_TOP - TILE_SIZE) + TILE_SIZE / 2 - SPRING_RISE,
 ); // 72
+
+/**
+ * Throw-launch feet peak from a floor-standing carrier. The rider is pinned
+ * at carrier.y - TILE_SIZE while carried, then thrown with JUMP_VELOCITY*1.15.
+ * Platforms in [THROW_FEET_PEAK, STACK3_FEET_PEAK) require a throw — stacking
+ * is too short, and solo/2-stack are way too short. Keep this constant in
+ * sync with THROW_VY inside GameRoom.processCarryInputs (MOVE_SPEED*1.3 for
+ * horizontal, JUMP_VELOCITY*1.15 for vertical).
+ */
+const THROW_VY_MAGNITUDE = Math.abs(JUMP_VELOCITY) * 1.15;
+const THROW_RISE = (THROW_VY_MAGNITUDE * THROW_VY_MAGNITUDE) / (2 * GRAVITY);
+export const THROW_FEET_PEAK = Math.round(
+  (PLAYER_ON_FLOOR - TILE_SIZE) + TILE_SIZE / 2 - THROW_RISE,
+); // ~303
+
+/**
+ * Rough horizontal distance a thrown rider covers between release and landing
+ * back at floor level. Useful for placing throw-target platforms — expect
+ * practical landing spots ~200–550 px from the carrier depending on how high
+ * the rider lands. Derived from MOVE_SPEED*1.3 × full air time.
+ */
+export const THROW_HORIZONTAL_MAX = Math.round(MOVE_SPEED * 1.3 * (2 * THROW_VY_MAGNITUDE) / GRAVITY); // ~598
 
 // ─── Solid-rect factories ─────────────────────────────────────────────────────
 
@@ -222,6 +245,35 @@ export function goalOnFloor(id: string, x: number): LevelObjectDef {
     height: TILE_SIZE,
     requiredPlayers: 0,
     linkedId: '',
+  };
+}
+
+/**
+ * Moving platform — acts as a one-way solid rect that oscillates linearly
+ * between two points. Players standing on top are carried along.
+ *
+ * `startX`/`yTop` describes the top-left at the start of motion (matching
+ * platformRect), `width` is the platform width. Motion is in center-coordinates
+ * — e.g. horizontal motion from x=400 to x=800 means the center travels that
+ * range, so set the initial `startX` such that its center equals `motion.from`.
+ */
+export function movingPlatform(
+  id: string,
+  startX: number,
+  yTop: number,
+  width: number,
+  motion: PlatformMotion,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'platform',
+    x: startX + width / 2,
+    y: yTop + TILE_SIZE / 2,
+    width,
+    height: TILE_SIZE,
+    requiredPlayers: 0,
+    linkedId: '',
+    motion,
   };
 }
 

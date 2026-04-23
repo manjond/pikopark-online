@@ -73,6 +73,9 @@ export class GameScene extends Phaser.Scene {
     left: Phaser.Input.Keyboard.Key;
     right: Phaser.Input.Keyboard.Key;
   };
+  /** Interact key (E) — pickup/throw another player. */
+  private interactKey!: Phaser.Input.Keyboard.Key;
+  private touchInteractPending = false;
 
   // ── Network ────────────────────────────────────────────────────────────────
   private network!: ColyseusClient;
@@ -158,6 +161,7 @@ export class GameScene extends Phaser.Scene {
       left: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       right: this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.D),
     };
+    this.interactKey = this.input.keyboard!.addKey(Phaser.Input.Keyboard.KeyCodes.E);
 
     this.scene.launch('UIScene');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
@@ -215,6 +219,11 @@ export class GameScene extends Phaser.Scene {
     const movingLeft  = this.cursors.left.isDown  || this.wasd.left.isDown  || this.touchLeft;
     const movingRight = this.cursors.right.isDown || this.wasd.right.isDown || this.touchRight;
 
+    const interactPressed =
+      Phaser.Input.Keyboard.JustDown(this.interactKey) ||
+      this.touchInteractPending;
+    this.touchInteractPending = false;
+
     // ── Camera follows the local player ───────────────────────────────────
     if (this.localSessionId) {
       const local = this.players.get(this.localSessionId);
@@ -233,7 +242,7 @@ export class GameScene extends Phaser.Scene {
       left: movingLeft,
       right: movingRight,
       jump: jumpPressed,
-      interact: false,
+      interact: interactPressed,
       sequence: this.inputSequence++,
     };
     this.room.send('input', input);
@@ -395,6 +404,23 @@ export class GameScene extends Phaser.Scene {
     room.onMessage('springBounce', (data: { id: string; playerId: string }) => {
       playSpring();
       this.interactiveObjects.get(data.id)?.playBounceAnim();
+    });
+
+    // ── Moving platform position updates (server sends each tick) ──────────
+    // Schema doesn't sync platform x/y (motion is server-only); this message
+    // carries the authoritative current position so clients render them.
+    room.onMessage('platformPositions', (list: Array<{ id: string; x: number; y: number }>) => {
+      for (const p of list) {
+        this.interactiveObjects.get(p.id)?.setPosition(p.x, p.y);
+      }
+    });
+
+    // ── Pickup/throw events — feedback sounds + floating label text ────────
+    room.onMessage('pickup', (data: { carrierId: string; carriedId: string }) => {
+      this.showCarryFloater(data.carrierId, 'PICK UP', 0x88ddff);
+    });
+    room.onMessage('throw', (data: { carrierId: string }) => {
+      this.showCarryFloater(data.carrierId, 'THROW!', 0xffbb33);
     });
 
     console.log(`[GameScene] Connected → room ${room.id} (${room.sessionId})`);
@@ -707,6 +733,34 @@ export class GameScene extends Phaser.Scene {
       () => { this.touchJumpPending = true; },
       () => { /* one-shot */ },
     );
+    makeBtn(GAME_WIDTH - 58, H - 20, 'E',
+      () => { this.touchInteractPending = true; },
+      () => { /* one-shot */ },
+    );
+  }
+
+  // ─── Pickup/throw floating label ──────────────────────────────────────────────
+
+  /** Pop a short text label above the carrier sprite to signal a pickup/throw. */
+  private showCarryFloater(carrierId: string, text: string, colorHex: number): void {
+    const sprite = this.players.get(carrierId);
+    if (!sprite) return;
+    const colorStr = '#' + colorHex.toString(16).padStart(6, '0');
+    const label = this.add.text(sprite.x, sprite.y - 40, text, {
+      fontFamily: '"Press Start 2P"',
+      fontSize: '8px',
+      color: colorStr,
+      stroke: '#000',
+      strokeThickness: 3,
+    }).setOrigin(0.5).setDepth(6);
+    this.tweens.add({
+      targets: label,
+      y: label.y - 18,
+      alpha: { from: 1, to: 0 },
+      duration: 700,
+      ease: 'Cubic.easeOut',
+      onComplete: () => label.destroy(),
+    });
   }
 
   // ─── Level geometry ───────────────────────────────────────────────────────────

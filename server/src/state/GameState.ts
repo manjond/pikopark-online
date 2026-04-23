@@ -3,7 +3,7 @@ import { PlayerState } from './Player';
 
 export class ObjectState extends Schema {
   @type('string') id: string = '';
-  /** 'button' | 'door' | 'goal' | 'trap' | 'spring' */
+  /** 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform' */
   @type('string') type: string = 'button';
   @type('number') x: number = 0;
   @type('number') y: number = 0;
@@ -20,6 +20,45 @@ export class ObjectState extends Schema {
    * to clients — bounces are announced via the 'springBounce' broadcast.
    */
   power: number = 0;
+
+  // ── Moving-platform motion (server-only — not synced through schema, but
+  //     broadcast every tick via the 'platformPositions' message). ─────────
+  /** '' | 'x' | 'y' */
+  motionAxis: string = '';
+  motionFrom: number = 0;
+  motionTo: number = 0;
+  motionSpeed: number = 0;
+  /** Oscillation phase in ms — used to compute current position. */
+  motionPhase: number = 0;
+  /** Last frame's velocity along the motion axis — used to carry riders. */
+  platformVX: number = 0;
+  platformVY: number = 0;
+  /** Last frame's position on the motion axis — used to compute velocity. */
+  private prevMotionPos: number = 0;
+  /** Tracks whether prevMotionPos has been initialised. */
+  private prevMotionPosInit: boolean = false;
+
+  /**
+   * Advance motion by `dtMs` and update x/y, plus velocities for riders.
+   * Safe to call on non-moving platforms (no-op).
+   */
+  tickMotion(dtMs: number): void {
+    if (!this.motionAxis) return;
+    const dist = Math.abs(this.motionTo - this.motionFrom);
+    if (dist === 0 || this.motionSpeed === 0) return;
+    const cycleMs = (dist * 2 / this.motionSpeed) * 1000;
+    this.motionPhase = (this.motionPhase + dtMs) % cycleMs;
+    const progress = this.motionPhase / cycleMs;   // 0..1
+    const t = progress < 0.5 ? progress * 2 : 2 - progress * 2; // triangle 0..1..0
+    const pos = this.motionFrom + t * (this.motionTo - this.motionFrom);
+
+    if (!this.prevMotionPosInit) { this.prevMotionPos = pos; this.prevMotionPosInit = true; }
+    const v = dtMs > 0 ? (pos - this.prevMotionPos) * (1000 / dtMs) : 0;
+    this.prevMotionPos = pos;
+
+    if (this.motionAxis === 'x') { this.x = pos; this.platformVX = v; this.platformVY = 0; }
+    else { this.y = pos; this.platformVX = 0; this.platformVY = v; }
+  }
 }
 
 export class GameState extends Schema {

@@ -16,9 +16,22 @@ export interface SpawnPoint {
   y: number;  // player center
 }
 
+/**
+ * Moving-platform oscillation definition. The platform travels linearly
+ * between `from` and `to` (on `axis`) at `speed` px/s, bouncing at each
+ * endpoint. Players standing on top inherit horizontal motion automatically
+ * (GameRoom.tick propagates platformVX each tick).
+ */
+export interface PlatformMotion {
+  axis: 'x' | 'y';
+  from: number;
+  to: number;
+  speed: number;
+}
+
 export interface LevelObjectDef {
   id: string;
-  type: 'button' | 'door' | 'goal' | 'trap' | 'spring';
+  type: 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform';
   x: number;      // center x
   y: number;      // center y
   width: number;
@@ -30,6 +43,8 @@ export interface LevelObjectDef {
   latching?: boolean;
   /** Spring launch velocity (px/s, negative = upward). Overrides the default. */
   power?: number;
+  /** Only for type='platform' — defines the oscillation path. */
+  motion?: PlatformMotion;
 }
 
 export interface LevelData {

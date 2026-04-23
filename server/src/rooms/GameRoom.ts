@@ -11,6 +11,8 @@ import {
   GAME_HEIGHT,
   TILE_SIZE,
   GRAVITY,
+  JUMP_VELOCITY,
+  MOVE_SPEED,
   SPRING_VELOCITY,
   SolidRect,
   LevelData,
@@ -218,8 +220,18 @@ export class GameRoom extends Room<GameState> {
     }
     const player = this.state.players.get(client.sessionId);
     if (player) {
+      // Break any carry link this player is part of so neither side is stuck.
+      if (player.carrying) {
+        const rider = this.state.players.get(player.carrying);
+        if (rider) rider.carriedBy = '';
+      }
+      if (player.carriedBy) {
+        const carrier = this.state.players.get(player.carriedBy);
+        if (carrier) carrier.carrying = '';
+      }
       this.broadcast('playerLeft', { name: player.name });
       this.state.players.delete(client.sessionId);
+      this.carryChanged = true;
     }
     if (client.sessionId === this.hostId) {
       this.hostId = '';
@@ -259,6 +271,13 @@ export class GameRoom extends Room<GameState> {
       obj.latching = def.latching ?? false;
       obj.activated = false;
       obj.power = def.power ?? (def.type === 'spring' ? SPRING_VELOCITY : 0);
+      if (def.motion) {
+        obj.motionAxis = def.motion.axis;
+        obj.motionFrom = def.motion.from;
+        obj.motionTo = def.motion.to;
+        obj.motionSpeed = def.motion.speed;
+        obj.motionPhase = 0;
+      }
       this.state.interactiveObjects.set(def.id, obj);
       this.prevObjStates.set(def.id, false);
     }
@@ -274,6 +293,10 @@ export class GameRoom extends Room<GameState> {
       player.velocityX = 0;
       player.velocityY = 0;
       player.isGrounded = true;
+      // Break any stale carry links carried over from the previous level
+      player.carriedBy = '';
+      player.carrying = '';
+      player.prevInteract = false;
       spawnIndex++;
     });
 
@@ -303,6 +326,27 @@ export class GameRoom extends Room<GameState> {
       if (obj.type === 'button' && !obj.latching) obj.activated = false;
     });
 
+    // ── Advance moving platforms ──────────────────────────────────────────────
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type === 'platform') obj.tickMotion(deltaTime);
+    });
+
+    // ── Process pickup/throw requests (edge-triggered on interact press) ──────
+    this.processCarryInputs();
+
+    // ── Pin carried players to their carrier's head before integration ────────
+    this.state.players.forEach((player) => {
+      if (!player.carriedBy) return;
+      const carrier = this.state.players.get(player.carriedBy);
+      if (!carrier) { player.carriedBy = ''; return; }
+      player.x = carrier.x;
+      player.y = carrier.y - TILE_SIZE;
+      player.velocityX = 0;
+      player.velocityY = 0;
+      player.isGrounded = false;
+      player.animation = 'carried';
+    });
+
     // ── Physics with sub-steps to prevent tunnelling ───────────────────────────
     const subDt = dt / SUBSTEPS;
 
@@ -313,6 +357,9 @@ export class GameRoom extends Room<GameState> {
 
       // ── Integrate & collide each player ──────────────────────────────────────
       this.state.players.forEach((player, id) => {
+        // Carried players were pinned above; skip their integration entirely.
+        if (player.carriedBy) return;
+
         const py = prevY.get(id) ?? player.y;
 
         if (!player.isGrounded) {
@@ -362,6 +409,29 @@ export class GameRoom extends Room<GameState> {
             break;
           }
         }
+
+        // Moving platforms — treat as one-way solids, drag riders along.
+        this.state.interactiveObjects.forEach((plat) => {
+          if (plat.type !== 'platform') return;
+          const pLft = plat.x - plat.width / 2;
+          const pRgt = plat.x + plat.width / 2;
+          const pTop = plat.y - plat.height / 2;
+          if (!(pRight > pLft && pLeft < pRgt)) return;
+
+          if (
+            player.velocityY >= 0 &&
+            currBottom >= pTop &&
+            prevBottom <= pTop + TILE_SIZE * 0.6
+          ) {
+            player.y = pTop - TILE_SIZE / 2;
+            player.velocityY = 0;
+            player.isGrounded = true;
+            // Carry horizontal motion with the platform during this sub-step
+            player.x += plat.platformVX * subDt;
+            // Vertical lift: if platform moves up, push player up with it
+            if (plat.platformVY < 0) player.y += plat.platformVY * subDt;
+          }
+        });
 
         // Ground (always resolves)
         if (player.y >= FLOOR_Y) {
@@ -619,6 +689,98 @@ export class GameRoom extends Room<GameState> {
       this.state.interactiveObjects.forEach((obj) => objStates.push({ id: obj.id, activated: obj.activated }));
       this.broadcast('objectStates', objStates);
     }
+
+    // ── Broadcast moving-platform positions every tick ─────────────────────────
+    // The schema doesn't sync x/y for platforms (motion fields are server-only),
+    // so clients rely on this message to render their current position.
+    const platformPositions: Array<{ id: string; x: number; y: number }> = [];
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type === 'platform' && obj.motionAxis) {
+        platformPositions.push({ id: obj.id, x: obj.x, y: obj.y });
+      }
+    });
+    if (platformPositions.length > 0) this.broadcast('platformPositions', platformPositions);
+
+    // ── Broadcast carry links (edge-triggered only, to save bandwidth) ─────────
+    // Clients read this to show pickup/throw visuals.
+    if (this.carryChanged) {
+      const carryList: Array<{ carrierId: string; carriedId: string }> = [];
+      this.state.players.forEach((p) => {
+        if (p.carrying) carryList.push({ carrierId: p.id, carriedId: p.carrying });
+      });
+      this.broadcast('carryStates', carryList);
+      this.carryChanged = false;
+    }
+  }
+
+  // ─── Pickup/throw handling ────────────────────────────────────────────────────
+
+  /** Flag raised by processCarryInputs so we only broadcast on change. */
+  private carryChanged = false;
+
+  /**
+   * Edge-triggered pickup/throw. On rising edge of Interact:
+   *   • If already carrying: throw (apply impulse, clear links).
+   *   • Else if grounded and next to a free grounded player: pick them up.
+   *
+   * Riders themselves cannot press Interact to drop — only the carrier can
+   * throw. This keeps the state machine clean and the UX predictable.
+   */
+  private processCarryInputs(): void {
+    const PICKUP_RADIUS = TILE_SIZE * 1.4;
+    // Throw velocity — picked so a thrown rider can reach platforms in the
+    // [~300, 357) y-band (below STACK3_FEET_PEAK=357). That gives a design
+    // window where carry+throw is the only solution, distinct from stacking.
+    const THROW_VX = MOVE_SPEED * 1.3;
+    const THROW_VY = JUMP_VELOCITY * 1.15;
+
+    this.state.players.forEach((carrier) => {
+      const pressEdge = carrier.isInteracting && !carrier.prevInteract;
+      carrier.prevInteract = carrier.isInteracting;
+      if (!pressEdge) return;
+      // Being carried → pressing interact has no effect here (only the carrier throws)
+      if (carrier.carriedBy) return;
+
+      if (carrier.carrying) {
+        // ── Throw ──
+        const rider = this.state.players.get(carrier.carrying);
+        if (rider) {
+          rider.velocityX = carrier.facing * THROW_VX;
+          rider.velocityY = THROW_VY;
+          rider.carriedBy = '';
+          rider.isGrounded = false;
+          rider.animation = 'jump';
+        }
+        carrier.carrying = '';
+        this.broadcast('throw', { carrierId: carrier.id });
+        this.carryChanged = true;
+        return;
+      }
+
+      // ── Pickup ── only when grounded; find the closest free grounded neighbour
+      if (!carrier.isGrounded) return;
+      let best: PlayerState | null = null;
+      let bestDist = PICKUP_RADIUS;
+      this.state.players.forEach((target) => {
+        if (target === carrier) return;
+        if (target.carriedBy || target.carrying) return; // already in a carry chain
+        if (!target.isGrounded) return;
+        const dx = target.x - carrier.x;
+        const dy = target.y - carrier.y;
+        const d = Math.hypot(dx, dy);
+        if (d < bestDist) { best = target; bestDist = d; }
+      });
+      if (best !== null) {
+        const rider: PlayerState = best;
+        carrier.carrying = rider.id;
+        rider.carriedBy = carrier.id;
+        rider.velocityX = 0;
+        rider.velocityY = 0;
+        rider.animation = 'carried';
+        this.broadcast('pickup', { carrierId: carrier.id, carriedId: rider.id });
+        this.carryChanged = true;
+      }
+    });
   }
 
   // ─── Helpers ─────────────────────────────────────────────────────────────────

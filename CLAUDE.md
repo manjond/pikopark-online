@@ -247,11 +247,25 @@ on the client side — they will silently return nothing and the bug will reappe
 - [x] Server rejects startGame if players < pack.minPlayers with `startError` message
 
 ### Phase 6 — Nice to Have
-- [ ] Spectator mode (join as observer, no player sprite)
-- [ ] Persistent leaderboard (fastest room times per level)
+- [x] Spectator mode (join as observer, no player sprite) — spectators pool separate from `state.players`, cap 16 per room, late joiners auto-routed to spectator, camera auto-follows lowest-id player or pans with arrows
+- [x] Persistent leaderboard (fastest room times per level) — file-backed JSON at `server/data/leaderboard.json` (or `LEADERBOARD_PATH`), top-10 per level, atomic write-via-rename, `/leaderboard` + `/leaderboard/:levelId` HTTP endpoints, menu "LEADERBOARD" screen
 - [ ] Level editor (visual drag-drop tool for SolidRect + objects → exports JSON)
-- [ ] More cooperative mechanics: springs, carrying, moving platforms
-- [ ] More levels (10+ total)
+- [x] More cooperative mechanics: springs (bounce pack), carrying (E = pickup/throw, pinned to carrier's head), moving platforms (triangle-wave motion, riders inherit `platformVX`, broadcast via `platformPositions`)
+- [x] More levels (10+ total) — 31 levels across 7 packs (Basics, Duo, Hazards, Squad, Extreme, Bounce, Acrobatics)
+
+#### Carry / throw mechanic
+
+- Press **E** next to a free grounded ally → they're pinned at your head (`carriedBy`/`carrying` on PlayerState). You can walk; you can't jump while carrying (the head-block rule covers this).
+- Press **E** again while carrying → throw in your facing direction. Rider launched with `VX = MOVE_SPEED * 1.3 * facing`, `VY = JUMP_VELOCITY * 1.15`.
+- `THROW_FEET_PEAK ≈ 303` in `_helpers.ts` — use it to gate puzzle platforms: top-y in `[THROW_FEET_PEAK, STACK3_FEET_PEAK)` ≈ `[303, 357)` is the throw-only reachability window. Throwing from an elevated vantage (e.g., the lift at top-y=380) both pushes horizontal reach from ~396 px to ~558 px and lets the rider land higher (below y=303).
+- Rider cannot press **E** themselves to drop — only the carrier throws. Keeps the state machine simple.
+
+#### Moving platforms
+
+- New `'platform'` object type. Factory: `movingPlatform(id, startX, yTop, width, motion)` where `motion = { axis: 'x'|'y', from, to, speed }` — `from`/`to` are in **center coordinates** on the motion axis, so `startX + width/2` should equal `motion.from` to start at the left/bottom dock.
+- Server `ObjectState.tickMotion(dtMs)` advances a triangle-wave between `from` and `to` at `speed` px/s, then exposes `platformVX` / `platformVY` for rider carry.
+- Integration loop treats platforms as one-way solids (land on top only), drags grounded riders horizontally each sub-step, and pushes riders upward with a rising Y-axis platform.
+- Client reads `platformPositions` each tick and updates the rendered rect. The schema intentionally doesn't sync platform x/y — motion fields are server-only.
 
 ## Improvement Ideas (game design)
 
@@ -309,7 +323,7 @@ These are ideas for making the game more engaging — not yet scheduled, just do
 - Object factories: `floorButton`, `platformButton`, `fullHeightDoor`, `floorTrap`, `floorSpring`, `goalOnFloor`, `goalOnPlatform`. `platformButton` accepts `{ width, latching, requiredPlayers, yOffset }` — `yOffset` overrides the vertical distance from platform top (default `TILE_SIZE/2 = 16`; bounce pack uses `4`).
 - Validator: `validateLevel`, `validatePack`, `validateAllPacks`
 
-### Migration status (28 levels ✅ complete)
+### Migration status (31 levels ✅ complete)
 All 28 `levelN.ts` files now use the helper factories (`groundRect`, `platformRect`, `standardSpawns`, `floorButton`, `platformButton`, `fullHeightDoor`, `floorTrap`, `floorSpring`, `goalOnFloor`, `goalOnPlatform`). Conventions unified across the whole catalog:
 
 - All spawns use `standardSpawns()` default (48/112/176/240).

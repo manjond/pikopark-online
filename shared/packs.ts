@@ -27,6 +27,9 @@ import { LEVEL_25 } from './levels/level25';
 import { LEVEL_26 } from './levels/level26';
 import { LEVEL_27 } from './levels/level27';
 import { LEVEL_28 } from './levels/level28';
+import { LEVEL_29 } from './levels/level29';
+import { LEVEL_30 } from './levels/level30';
+import { LEVEL_31 } from './levels/level31';
 
 export const PACK_BASICS: LevelPack = {
   id: 'basics',
@@ -70,6 +73,13 @@ export const PACK_BOUNCE: LevelPack = {
   levels: [LEVEL_26, LEVEL_27, LEVEL_28],
 };
 
+export const PACK_ACROBATICS: LevelPack = {
+  id: 'acrobatics',
+  name: 'Acrobatics',
+  minPlayers: 2,
+  levels: [LEVEL_29, LEVEL_30, LEVEL_31],
+};
+
 export const ALL_PACKS: LevelPack[] = [
   PACK_BASICS,
   PACK_DUO,
@@ -77,4 +87,5 @@ export const ALL_PACKS: LevelPack[] = [
   PACK_EXTREME,
   PACK_SQUAD,
   PACK_BOUNCE,
+  PACK_ACROBATICS,
 ];

@@ -9,6 +9,8 @@ const TRAP_ACTIVE     = 0xff2200;  // red-orange — dangerous spikes
 const TRAP_INACTIVE   = 0x444444;  // grey — deactivated trap
 const SPRING_BASE     = 0x22cc88;  // green  — spring body
 const SPRING_ARROW    = 0xffffff;  // white  — arrow up indicator
+const PLATFORM_FILL   = 0xc88c32;  // warm amber — moving platforms stand out vs grey static tiles
+const PLATFORM_STROKE = 0x6a4010;
 
 export class InteractiveObject {
   private readonly scene: Phaser.Scene;
@@ -107,6 +109,11 @@ export class InteractiveObject {
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, TRAP_ACTIVE);
       this.rect.setDepth(0);
 
+    } else if (data.type === 'platform') {
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, PLATFORM_FILL);
+      this.rect.setStrokeStyle(2, PLATFORM_STROKE);
+      this.rect.setDepth(1);
+
     } else if (data.type === 'spring') {
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, SPRING_BASE);
       this.rect.setStrokeStyle(1, 0x115533);
@@ -161,6 +168,12 @@ export class InteractiveObject {
     }
     // goal/spring have no sync state — goal spins, spring animates on bounce
     this.prevActivated = data.activated;
+  }
+
+  /** Update a moving platform's rendered position — called from platformPositions. */
+  setPosition(x: number, y: number): void {
+    this.rect.x = x;
+    this.rect.y = y;
   }
 
   /** Play a brief squash animation on the spring pad (called on bounce). */
