@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { loadStoredAccount } from './AuthScene';
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -10,10 +11,10 @@ export class BootScene extends Phaser.Scene {
   }
 
   create(): void {
-    // Wait for the Google Font to load before starting the menu so text
-    // is rendered correctly on first frame.
+    // Returning visitors with a cached account skip AuthScene entirely.
+    const next = loadStoredAccount() !== null ? 'MenuScene' : 'AuthScene';
     document.fonts.ready
-      .then(() => this.scene.start('MenuScene'))
-      .catch(() => this.scene.start('MenuScene')); // start anyway on failure
+      .then(() => this.scene.start(next))
+      .catch(() => this.scene.start(next));
   }
 }

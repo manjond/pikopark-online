@@ -176,11 +176,13 @@ export class GameRoom extends Room<GameState> {
 
   onJoin(client: Client, options: Record<string, unknown>): void {
     const wantsSpectator = options['spectator'] === true;
-    // Once a game is running, block further active joins — late arrivals may
-    // only watch. Prevents mid-level spawns that would confuse physics and
-    // the minPlayers invariant.
-    const forceSpectator = this.gameStarted && !wantsSpectator;
-    const asSpectator = wantsSpectator || forceSpectator;
+    // Late joiners can now land as active players mid-game instead of being
+    // force-converted to spectator. Fallback to spectator only when the
+    // active slots are full. A player joining mid-level spawns at the level's
+    // spawn point for their slot index and is broadcast to everyone via the
+    // next playerList + positions tick.
+    const activeFull = this.state.players.size >= MAX_PLAYERS;
+    const asSpectator = wantsSpectator || activeFull;
 
     // Cap enforcement: players cap is MAX_PLAYERS; spectators cap is MAX_SPECTATORS.
     if (asSpectator && this.spectators.size >= MAX_SPECTATORS) {
@@ -188,6 +190,8 @@ export class GameRoom extends Room<GameState> {
       client.leave();
       return;
     }
+    // `activeFull` branch is already redirected to spectator above; the only
+    // remaining way to hit this block is a bug, kept as a defensive rail.
     if (!asSpectator && this.state.players.size >= MAX_PLAYERS) {
       client.send('joinError', { message: 'Room full: too many players' });
       client.leave();
@@ -250,6 +254,17 @@ export class GameRoom extends Room<GameState> {
     this.broadcast('playerJoined', { name: player.name, color: player.color });
 
     if (this.hostId === '') this.hostId = client.sessionId;
+
+    // Mid-game arrival: send the new active player straight into GameScene at
+    // the current level, same hand-off we use for mid-game spectators. Without
+    // this they'd sit on LobbyScene while everyone else is already playing.
+    if (this.gameStarted) {
+      client.send('gameStart', {
+        packId: this.selectedPack.id,
+        levelId: levelData.id,
+        mapWidth: levelData.mapWidth ?? GAME_WIDTH,
+      });
+    }
 
     this.broadcastPlayerList();
   }

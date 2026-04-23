@@ -30,6 +30,8 @@ interface GameSceneData {
   levelId?: number;
   mapWidth?: number;
   isSpectator?: boolean;
+  /** Pre-resolved room code from LobbyScene — used for the HUD */
+  roomCode?: string;
 }
 
 interface PositionMsg {
@@ -118,6 +120,9 @@ export class GameScene extends Phaser.Scene {
   private isSpectator = false;
   private spectatorCameraX = 0;
 
+  // ── Room code passed from LobbyScene for immediate HUD display ────────────
+  private initialRoomCode: string | null = null;
+
   constructor() {
     super({ key: 'GameScene' });
   }
@@ -129,6 +134,7 @@ export class GameScene extends Phaser.Scene {
     this.initialLevelId = data.levelId ?? null;
     this.initialMapWidth = data.mapWidth ?? null;
     this.isSpectator = data.isSpectator === true;
+    this.initialRoomCode = data.roomCode ?? null;
   }
 
   create(): void {
@@ -176,6 +182,13 @@ export class GameScene extends Phaser.Scene {
 
     this.scene.launch('UIScene');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
+
+    // UIScene.create() runs on the next frame, so defer the HUD update by a
+    // tick so the target text field exists.
+    if (this.initialRoomCode) {
+      const code = this.initialRoomCode;
+      this.time.delayedCall(50, () => this.ui()?.setConnected(code));
+    }
 
     startBgMusic();
     this.levelStartTime = Date.now();

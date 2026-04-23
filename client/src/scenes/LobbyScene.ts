@@ -270,6 +270,12 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     this.room.onMessage('gameStart', (data: { packId?: string; levelId?: number; mapWidth?: number } = {}) => {
+      // Pull the room code we already displayed so GameScene can hand it
+      // straight to UIScene — avoids the "Connecting..." HUD that happened
+      // because GameScene's schema read of roomCode runs after the initial
+      // sync has already settled (no onStateChange fires).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const roomCode = (this.room.state as any)?.roomCode as string | undefined;
       this.scene.start('GameScene', {
         room: this.room,
         network: this.network,
@@ -277,6 +283,7 @@ export class LobbyScene extends Phaser.Scene {
         packId: data.packId ?? this.selectedPackId,
         levelId: data.levelId,
         mapWidth: data.mapWidth,
+        roomCode,
       });
     });
 

@@ -4,6 +4,7 @@ import { Server } from 'colyseus';
 import { WebSocketTransport } from '@colyseus/ws-transport';
 import { GameRoom } from './rooms/GameRoom';
 import { leaderboardInstance } from './leaderboard/Leaderboard';
+import { accountStoreInstance } from './auth/AccountStore';
 import { ALL_PACKS, SERVER_PORT, validateAllPacks } from '@pikopark/shared';
 
 const app = express();
@@ -18,11 +19,23 @@ app.use('/leaderboard', (_req, res, next) => {
   next();
 });
 
+// Same CORS trick for /auth so the Vite dev server can POST to the local
+// Colyseus box and a Vercel-hosted client can hit the production backend.
+app.use('/auth', (_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  next();
+});
+app.options('/auth/register', (_req, res) => { res.sendStatus(204); });
+app.options('/auth/login', (_req, res) => { res.sendStatus(204); });
+
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.0', built: new Date().toISOString() });
 });
 
 const leaderboard = leaderboardInstance();
+const accounts = accountStoreInstance();
 
 app.get('/leaderboard', (_req, res) => {
   res.json({ version: 1, levels: leaderboard.getAll() });
@@ -35,6 +48,32 @@ app.get('/leaderboard/:levelId', (req, res) => {
     return;
   }
   res.json({ levelId: id, top: leaderboard.getTop(id) });
+});
+
+app.post('/auth/register', (req, res) => {
+  const body = (req.body ?? {}) as { username?: unknown; password?: unknown };
+  accounts.register(String(body.username ?? ''), String(body.password ?? ''))
+    .then((result) => {
+      if (result.ok) res.json({ username: result.username });
+      else res.status(result.code).json({ error: result.error });
+    })
+    .catch((err: unknown) => {
+      console.error('[auth/register]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+app.post('/auth/login', (req, res) => {
+  const body = (req.body ?? {}) as { username?: unknown; password?: unknown };
+  accounts.login(String(body.username ?? ''), String(body.password ?? ''))
+    .then((result) => {
+      if (result.ok) res.json({ username: result.username });
+      else res.status(result.code).json({ error: result.error });
+    })
+    .catch((err: unknown) => {
+      console.error('[auth/login]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
 });
 
 const httpServer = createServer(app);
@@ -56,7 +95,7 @@ if (fatal.length > 0) {
 }
 
 async function boot(): Promise<void> {
-  await leaderboard.load();
+  await Promise.all([leaderboard.load(), accounts.load()]);
   httpServer.listen(port, () => {
     console.log(`[Colyseus] Listening on ws://localhost:${port}`);
   });

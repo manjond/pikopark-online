@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Room } from 'colyseus.js';
 import { ColyseusClient } from '../network/ColyseusClient';
+import { loadStoredAccount, clearStoredAccount } from './AuthScene';
 
 type MenuMode = 'main' | 'join' | 'spectate' | 'leaderboard' | 'connecting';
 type ConnectAction = 'create' | 'quickplay' | 'join' | 'spectate';
@@ -74,7 +75,26 @@ export class MenuScene extends Phaser.Scene {
       ...FONT, fontSize: '10px', color: '#444444',
     }).setOrigin(0.5);
 
-    this.mainGroup = this.add.group([title, createRoom, joinRoom, quickPlay, spectate, leaderboard, hint]);
+    // ── Account header (top-right) ─────────────────────────────────────────
+    const acct = loadStoredAccount();
+    const displayName = acct?.isGuest ? 'GUEST' : (acct?.username ?? 'GUEST');
+    const accountLabel = this.add.text(
+      this.cameras.main.width - 20, 20,
+      `logged in as ${displayName}`,
+      { ...FONT, fontSize: '10px', color: '#888888' },
+    ).setOrigin(1, 0);
+    const logoutBtn = this.add.text(
+      this.cameras.main.width - 20, 44, 'LOG OUT',
+      { ...FONT, fontSize: '10px', color: '#ff6666' },
+    ).setOrigin(1, 0).setInteractive({ useHandCursor: true });
+    logoutBtn.on('pointerover', () => logoutBtn.setColor('#ffffff'));
+    logoutBtn.on('pointerout', () => logoutBtn.setColor('#ff6666'));
+    logoutBtn.on('pointerdown', () => {
+      clearStoredAccount();
+      this.scene.start('AuthScene');
+    });
+
+    this.mainGroup = this.add.group([title, createRoom, joinRoom, quickPlay, spectate, leaderboard, hint, accountLabel, logoutBtn]);
 
     // ── Join-by-code group ──────────────────────────────────────────────────
     const joinTitle = this.add.text(cx, cy - 140, 'ENTER CODE', {
@@ -193,9 +213,13 @@ export class MenuScene extends Phaser.Scene {
     this.connectingGroup.setVisible(true);
 
     const isSpectator = action === 'spectate';
-    const playerName = isSpectator
-      ? `Spectator ${Math.floor(Math.random() * 100)}`
-      : `Player ${Math.floor(Math.random() * 100)}`;
+    const acct = loadStoredAccount();
+    const hasName = acct !== null && !acct.isGuest && acct.username.length > 0;
+    const playerName = hasName
+      ? acct.username
+      : isSpectator
+        ? `Spectator ${Math.floor(Math.random() * 100)}`
+        : `Player ${Math.floor(Math.random() * 100)}`;
     const joinOptions: Record<string, unknown> = { name: playerName };
     if (isSpectator) joinOptions['spectator'] = true;
 
