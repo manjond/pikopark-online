@@ -85,6 +85,17 @@ export class GameScene extends Phaser.Scene {
 
   // ── Level-complete overlay ─────────────────────────────────────────────────
   private levelCompleteOverlay: Phaser.GameObjects.GameObject[] = [];
+  /**
+   * Timer that fades the camera to black 4.4s after levelComplete. We keep
+   * the handle so we can cancel it if (a) the next `levelStart` arrives
+   * before the fade fires, or (b) the pack ended and we want to show the
+   * pack-complete overlay instead of a permanent black screen.
+   */
+  private levelCompleteFadeTimer: Phaser.Time.TimerEvent | null = null;
+
+  // ── Pack-complete overlay ─────────────────────────────────────────────────
+  private packCompleteOverlay: Phaser.GameObjects.GameObject[] = [];
+  private isHost = false;
 
   // ── Touch controls ─────────────────────────────────────────────────────────
   private touchLeft = false;
@@ -290,11 +301,25 @@ export class GameScene extends Phaser.Scene {
     this.subscribeToRoom();
   }
 
+  /**
+   * Wraps `room.onMessage` so every handler skips silently when the scene is
+   * no longer active. Colyseus doesn't unregister handlers on scene stop, so
+   * after a scene.start('LobbyScene') the old handlers keep firing and would
+   * otherwise touch destroyed sprites / a stale `this.add`, throwing.
+   */
+  private onRoomMessage<T>(room: Room, type: string, handler: (data: T) => void): void {
+    room.onMessage(type, (data: T) => {
+      if (!this.scene.isActive('GameScene')) return;
+      handler(data);
+    });
+  }
+
   private subscribeToRoom(): void {
     const room = this.room!;
 
     // ── Room code for HUD ─────────────────────────────────────────────────
     room.onStateChange.once((s) => {
+      if (!this.scene.isActive('GameScene')) return;
       const code = (s as NetworkGameState).roomCode;
       if (code) this.time.delayedCall(50, () => this.ui()?.setConnected(code));
     });
@@ -306,7 +331,9 @@ export class GameScene extends Phaser.Scene {
     // ── Player roster ─────────────────────────────────────────────────────
     // Server broadcasts playerList on join/leave and every 5 ticks.
     // We create/destroy player sprites here; positions come from 'positions'.
-    room.onMessage('playerList', (data: PlayerListMsg) => {
+    this.onRoomMessage<PlayerListMsg>(room, 'playerList', (data) => {
+      // Track host so only the host sees interactive pack-complete buttons.
+      this.isHost = !this.isSpectator && data.hostId === this.localSessionId;
       const knownIds = new Set(data.players.map((p) => p.id));
 
       // Remove sprites for players no longer in the room
@@ -348,7 +375,7 @@ export class GameScene extends Phaser.Scene {
     // ALL players are updated here — local and remote alike.
     // This is the single source of truth for rendered positions, which
     // guarantees every client sees every player at the same location.
-    room.onMessage('positions', (list: PositionMsg[]) => {
+    this.onRoomMessage<PositionMsg[]>(room, 'positions', (list) => {
       for (const pos of list) {
         this.players.get(pos.id)?.receiveServerPosition(
           pos.x,
@@ -360,7 +387,7 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Interactive object state changes ───────────────────────────────────
-    room.onMessage('objectStates', (list: Array<{ id: string; activated: boolean }>) => {
+    this.onRoomMessage<Array<{ id: string; activated: boolean }>>(room, 'objectStates', (list) => {
       for (const s of list) {
         const obj = this.interactiveObjects.get(s.id);
         if (!obj) continue;
@@ -376,13 +403,13 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Level complete ─────────────────────────────────────────────────────
-    room.onMessage('levelComplete', (data: {
+    this.onRoomMessage<{
       playerName: string;
       timeMs?: number;
       levelId?: number;
       newRecordRank?: number | null;
       top?: Array<{ timeMs: number; players: string[]; completedAt: string }>;
-    }) => {
+    }>(room, 'levelComplete', (data) => {
       this.showLevelComplete(
         data.playerName,
         data.top ?? [],
@@ -391,17 +418,17 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Level transition ───────────────────────────────────────────────────
-    room.onMessage('levelStart', (data: { levelId: number; mapWidth?: number }) => {
+    this.onRoomMessage<{ levelId: number; mapWidth?: number }>(room, 'levelStart', (data) => {
       this.rebuildLevel(data.levelId, data.mapWidth);
     });
 
     // ── Trap hit — flash red then server will restart ──────────────────────
-    room.onMessage('trapHit', () => {
+    this.onRoomMessage<void>(room, 'trapHit', () => {
       this.cameras.main.flash(400, 255, 0, 0, false);
     });
 
     // ── Spring bounce — play sound and squash-animate the pad ──────────────
-    room.onMessage('springBounce', (data: { id: string; playerId: string }) => {
+    this.onRoomMessage<{ id: string; playerId: string }>(room, 'springBounce', (data) => {
       playSpring();
       this.interactiveObjects.get(data.id)?.playBounceAnim();
     });
@@ -409,18 +436,38 @@ export class GameScene extends Phaser.Scene {
     // ── Moving platform position updates (server sends each tick) ──────────
     // Schema doesn't sync platform x/y (motion is server-only); this message
     // carries the authoritative current position so clients render them.
-    room.onMessage('platformPositions', (list: Array<{ id: string; x: number; y: number }>) => {
+    this.onRoomMessage<Array<{ id: string; x: number; y: number }>>(room, 'platformPositions', (list) => {
       for (const p of list) {
         this.interactiveObjects.get(p.id)?.setPosition(p.x, p.y);
       }
     });
 
     // ── Pickup/throw events — feedback sounds + floating label text ────────
-    room.onMessage('pickup', (data: { carrierId: string; carriedId: string }) => {
+    this.onRoomMessage<{ carrierId: string; carriedId: string }>(room, 'pickup', (data) => {
       this.showCarryFloater(data.carrierId, 'PICK UP', 0x88ddff);
     });
-    room.onMessage('throw', (data: { carrierId: string }) => {
+    this.onRoomMessage<{ carrierId: string }>(room, 'throw', (data) => {
       this.showCarryFloater(data.carrierId, 'THROW!', 0xffbb33);
+    });
+
+    // ── End of pack — show pack-complete picker, cancel stale fade ─────────
+    this.onRoomMessage<{
+      completedPackId: string;
+      completedPackName: string;
+      recommendedNextId: string | null;
+      availablePacks: Array<{ id: string; name: string; minPlayers: number }>;
+    }>(room, 'packComplete', (data) => {
+      this.showPackComplete(data);
+    });
+
+    // ── Host asked to return to lobby — swap scenes, keep the room alive ───
+    this.onRoomMessage<void>(room, 'returnToLobby', () => {
+      this.goBackToLobby();
+    });
+
+    // ── Start-game errors bubble up here too (e.g. continuePack w/ too few players)
+    this.onRoomMessage<{ message: string }>(room, 'startError', (data) => {
+      this.showPackError(data.message);
     });
 
     console.log(`[GameScene] Connected → room ${room.id} (${room.sessionId})`);
@@ -467,9 +514,16 @@ export class GameScene extends Phaser.Scene {
     this.physics.world.setBounds(0, 0, mw, GAME_HEIGHT);
     this.cameras.main.setBounds(0, 0, mw, GAME_HEIGHT);
 
-    // Clear level-complete overlay
+    // Kill a pending fadeOut so it can't fire after we've already faded back
+    // in — a lingering stale call was the root cause of the old black-screen
+    // lockup at the end of a pack.
+    this.levelCompleteFadeTimer?.remove(false);
+    this.levelCompleteFadeTimer = null;
+
+    // Clear level-complete + pack-complete overlays (rebuild means we're done)
     this.levelCompleteOverlay.forEach((obj) => obj.destroy());
     this.levelCompleteOverlay = [];
+    this.clearPackCompleteOverlay();
 
     // Rebuild tile geometry
     this.tiles.clear(true, true);
@@ -503,8 +557,14 @@ export class GameScene extends Phaser.Scene {
     this.emitGoalBurst();
 
     // Fade to black just before the server sends the next level (5 s delay).
-    // rebuildLevel() will fade back in on arrival of levelStart.
-    this.time.delayedCall(4400, () => this.cameras.main.fadeOut(600, 0, 0, 0));
+    // rebuildLevel() will fade back in on arrival of levelStart. We keep the
+    // handle so it can be cancelled — otherwise a stale fire (e.g. at the end
+    // of a pack) locks the screen black with audio still playing.
+    this.levelCompleteFadeTimer?.remove(false);
+    this.levelCompleteFadeTimer = this.time.delayedCall(4400, () => {
+      this.cameras.main.fadeOut(600, 0, 0, 0);
+      this.levelCompleteFadeTimer = null;
+    });
 
     const elapsedMs = Date.now() - this.levelStartTime;
     const timeStr = this.formatTime(elapsedMs);
@@ -560,6 +620,177 @@ export class GameScene extends Phaser.Scene {
       ...FONT, fontSize: '9px', color: '#888888',
     }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
     this.levelCompleteOverlay.push(footer);
+  }
+
+  // ─── Pack-complete overlay ────────────────────────────────────────────────────
+
+  private clearPackCompleteOverlay(): void {
+    this.packCompleteOverlay.forEach((o) => o.destroy());
+    this.packCompleteOverlay = [];
+  }
+
+  /**
+   * Shown at the end of a pack. Replaces the level-complete fade-out with
+   * an interactive picker: host clicks a pack to continue, others see a
+   * "waiting for host" note. Host also has a BACK TO LOBBY button.
+   */
+  private showPackComplete(data: {
+    completedPackId: string;
+    completedPackName: string;
+    recommendedNextId: string | null;
+    availablePacks: Array<{ id: string; name: string; minPlayers: number }>;
+  }): void {
+    // Cancel any stale fade-to-black and ensure the camera is visible —
+    // the level-complete overlay may have already triggered it.
+    this.levelCompleteFadeTimer?.remove(false);
+    this.levelCompleteFadeTimer = null;
+    this.cameras.main.fadeIn(300, 0, 0, 0);
+
+    // Tear down the level-complete overlay first — ours replaces it.
+    this.levelCompleteOverlay.forEach((obj) => obj.destroy());
+    this.levelCompleteOverlay = [];
+    this.clearPackCompleteOverlay();
+
+    const cx = GAME_WIDTH / 2;
+    const cy = GAME_HEIGHT / 2;
+    const FONT = { fontFamily: '"Press Start 2P"' };
+
+    const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.85)
+      .setDepth(20).setScrollFactor(0);
+    const title = this.add.text(cx, 90, 'PACK COMPLETE!', {
+      ...FONT, fontSize: '32px', color: '#ffd700',
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+    const sub = this.add.text(cx, 140, `Finished "${data.completedPackName}"`, {
+      ...FONT, fontSize: '12px', color: '#ffffff',
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+
+    this.packCompleteOverlay.push(bg, title, sub);
+
+    const prompt = this.isHost
+      ? 'Pick the next pack:'
+      : 'Waiting for host to pick the next pack...';
+    const promptText = this.add.text(cx, 186, prompt, {
+      ...FONT, fontSize: '11px', color: '#ffcc66',
+    }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+    this.packCompleteOverlay.push(promptText);
+
+    // Card grid — 2 columns, up to 4 rows. Cards list pack name + minPlayers.
+    // Recommended pack gets a highlighted border + "RECOMMENDED" tag.
+    const CARD_W = 300;
+    const CARD_H = 66;
+    const GAP_X = 28;
+    const GAP_Y = 16;
+    const COLS = 2;
+    const startY = 230;
+
+    data.availablePacks.forEach((pack, i) => {
+      const row = Math.floor(i / COLS);
+      const col = i % COLS;
+      const totalWidth = COLS * CARD_W + (COLS - 1) * GAP_X;
+      const x = cx - totalWidth / 2 + col * (CARD_W + GAP_X) + CARD_W / 2;
+      const y = startY + row * (CARD_H + GAP_Y);
+      const isRecommended = pack.id === data.recommendedNextId;
+      this.createPackCard(x, y, CARD_W, CARD_H, pack, isRecommended);
+    });
+
+    if (data.availablePacks.length === 0) {
+      const none = this.add.text(cx, startY + 30, '(no packs available — not enough players)', {
+        ...FONT, fontSize: '10px', color: '#aa7766',
+      }).setOrigin(0.5).setDepth(21).setScrollFactor(0);
+      this.packCompleteOverlay.push(none);
+    }
+
+    // Bottom row: BACK TO LOBBY (host only, non-hosts just see status).
+    if (this.isHost) {
+      const btn = this.add.rectangle(cx, GAME_HEIGHT - 60, 280, 38, 0x553333, 0.9)
+        .setStrokeStyle(2, 0xff6666).setDepth(21).setScrollFactor(0).setInteractive();
+      const lbl = this.add.text(cx, GAME_HEIGHT - 60, 'BACK TO LOBBY', {
+        ...FONT, fontSize: '11px', color: '#ffaaaa',
+      }).setOrigin(0.5).setDepth(22).setScrollFactor(0);
+      btn.on('pointerover', () => btn.setFillStyle(0x774444, 0.95));
+      btn.on('pointerout',  () => btn.setFillStyle(0x553333, 0.9));
+      btn.on('pointerdown', () => {
+        if (!this.room) return;
+        this.room.send('returnToLobby', {});
+      });
+      this.packCompleteOverlay.push(btn, lbl);
+    }
+  }
+
+  /** One clickable card in the pack-complete grid. */
+  private createPackCard(
+    x: number, y: number, w: number, h: number,
+    pack: { id: string; name: string; minPlayers: number },
+    recommended: boolean,
+  ): void {
+    const FONT = { fontFamily: '"Press Start 2P"' };
+    const fill = recommended ? 0x1b4b1b : 0x202040;
+    const stroke = recommended ? 0x88ff88 : 0x6666aa;
+
+    const card = this.add.rectangle(x, y, w, h, fill, 0.95)
+      .setStrokeStyle(2, stroke).setDepth(21).setScrollFactor(0);
+    const nameText = this.add.text(x, y - 12, pack.name.toUpperCase(), {
+      ...FONT, fontSize: '14px', color: recommended ? '#aaffaa' : '#ffffff',
+    }).setOrigin(0.5).setDepth(22).setScrollFactor(0);
+    const meta = this.add.text(x, y + 14, `min ${pack.minPlayers} players`, {
+      ...FONT, fontSize: '9px', color: '#bbbbbb',
+    }).setOrigin(0.5).setDepth(22).setScrollFactor(0);
+
+    this.packCompleteOverlay.push(card, nameText, meta);
+
+    if (recommended) {
+      const tag = this.add.text(x + w / 2 - 8, y - h / 2 + 10, 'RECOMMENDED', {
+        ...FONT, fontSize: '7px', color: '#002200', backgroundColor: '#aaffaa',
+      }).setOrigin(1, 0.5).setPadding(4, 2, 4, 2).setDepth(23).setScrollFactor(0);
+      this.packCompleteOverlay.push(tag);
+    }
+
+    if (!this.isHost) return;
+
+    // Host-only interactivity.
+    card.setInteractive({ useHandCursor: true });
+    card.on('pointerover', () => card.setFillStyle(recommended ? 0x276b27 : 0x333358, 0.95));
+    card.on('pointerout',  () => card.setFillStyle(fill, 0.95));
+    card.on('pointerdown', () => {
+      if (!this.room) return;
+      this.room.send('continuePack', { packId: pack.id });
+    });
+  }
+
+  /** Error toast — sits below the card grid, fades after a few seconds. */
+  private showPackError(message: string): void {
+    const cx = GAME_WIDTH / 2;
+    const t = this.add.text(cx, GAME_HEIGHT - 110, message, {
+      fontFamily: '"Press Start 2P"', fontSize: '10px',
+      color: '#ffaaaa', backgroundColor: '#330000',
+    }).setOrigin(0.5).setPadding(6, 4, 6, 4).setDepth(25).setScrollFactor(0);
+    this.tweens.add({
+      targets: t, alpha: { from: 1, to: 0 }, delay: 2400, duration: 600,
+      onComplete: () => t.destroy(),
+    });
+  }
+
+  /** Return to the lobby after host confirms. Cleans up, then hands the
+   * pre-connected room off to LobbyScene so we don't have to reconnect. */
+  private goBackToLobby(): void {
+    this.levelCompleteFadeTimer?.remove(false);
+    this.levelCompleteFadeTimer = null;
+    this.clearPackCompleteOverlay();
+    this.levelCompleteOverlay.forEach((o) => o.destroy());
+    this.levelCompleteOverlay = [];
+
+    stopBgMusic();
+
+    if (!this.room || !this.network) return;
+    const room = this.room;
+    const network = this.network;
+    const isSpectator = this.isSpectator;
+
+    // Null our reference so the SHUTDOWN cleanup in this scene doesn't leave
+    // the room. LobbyScene will adopt the same room instance.
+    this.room = null;
+
+    this.scene.start('LobbyScene', { room, network, isSpectator });
   }
 
   private formatTime(ms: number): string {

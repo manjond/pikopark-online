@@ -89,3 +89,24 @@ export const ALL_PACKS: LevelPack[] = [
   PACK_BOUNCE,
   PACK_ACROBATICS,
 ];
+
+/**
+ * Recommended play order — surfaced in the pack-complete screen so players
+ * can hit "Continue" and jump into the next pack by difficulty. Squad is
+ * deliberately last because of its 4-player minimum.
+ */
+export const PACK_ORDER: string[] = [
+  'basics',
+  'duo',
+  'bounce',
+  'acrobatics',
+  'hazards',
+  'extreme',
+  'squad',
+];
+
+export function getRecommendedNextPackId(currentId: string): string | null {
+  const idx = PACK_ORDER.indexOf(currentId);
+  if (idx === -1 || idx === PACK_ORDER.length - 1) return null;
+  return PACK_ORDER[idx + 1];
+}

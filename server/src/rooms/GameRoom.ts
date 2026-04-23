@@ -19,6 +19,7 @@ import {
   LevelPack,
   ALL_PACKS,
   PACK_BASICS,
+  getRecommendedNextPackId,
 } from '@pikopark/shared';
 
 const FLOOR_Y = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // player center when on ground
@@ -48,6 +49,12 @@ export class GameRoom extends Room<GameState> {
   private selectedPack: LevelPack = PACK_BASICS;
   private gameStarted = false;
   private mapWidth = GAME_WIDTH; // current level's map width
+
+  // Set after the last level of a pack is completed; clients show the
+  // pack-complete overlay and the host picks the next pack (or lobby).
+  // While true, regular input/goal logic still runs, but no new level
+  // auto-loads until a `continuePack`/`returnToLobby` message arrives.
+  private packCompletedPending = false;
 
   // Spectators live outside state.players — they don't participate in physics,
   // don't count toward minPlayers, can't host, can't press buttons. Keeping
@@ -117,6 +124,43 @@ export class GameRoom extends Room<GameState> {
         levelId: firstLevel.id,
         mapWidth: firstLevel.mapWidth ?? GAME_WIDTH,
       });
+    });
+
+    // After a pack finishes, the host picks what to play next. Loads level 0
+    // of the chosen pack and broadcasts `levelStart` — clients already handle
+    // that via rebuildLevel. Non-host messages are ignored so a spectator can't
+    // hijack the choice.
+    this.onMessage<{ packId: string }>('continuePack', (client, data) => {
+      if (client.sessionId !== this.hostId) return;
+      if (!this.packCompletedPending) return;
+      const pack = ALL_PACKS.find((p) => p.id === data.packId);
+      if (!pack) return;
+      const playerCount = this.state.players.size;
+      if (playerCount < pack.minPlayers) {
+        client.send('startError', {
+          message: `Need ${pack.minPlayers} players — only ${playerCount} connected`,
+        });
+        return;
+      }
+      this.selectedPack = pack;
+      this.packCompletedPending = false;
+      this.loadLevel(0, true);
+      this.broadcastPackInfo();
+      this.levelStartMs = Date.now();
+    });
+
+    // Host chooses to exit the pack-complete screen back to the lobby. Resets
+    // gameStarted so the room behaves like a fresh lobby, and broadcasts a
+    // `returnToLobby` message the clients use to swap scenes.
+    this.onMessage('returnToLobby', (client) => {
+      if (client.sessionId !== this.hostId) return;
+      if (!this.packCompletedPending) return;
+      this.gameStarted = false;
+      this.packCompletedPending = false;
+      this.currentLevelIndex = 0;
+      this.loadLevel(0);
+      this.broadcast('returnToLobby', {});
+      this.broadcastPackInfo();
     });
 
     this.onMessage<{ text: string }>('chat', (client, data) => {
@@ -663,6 +707,23 @@ export class GameRoom extends Room<GameState> {
             const nextIndex = this.currentLevelIndex + 1;
             if (nextIndex < this.selectedPack.levels.length) {
               this.clock.setTimeout(() => { this.loadLevel(nextIndex); }, 5000);
+            } else {
+              // Pack is finished. Instead of going silent (which used to leave
+              // the client's level-complete fade-out stuck in black), tell
+              // clients the pack is done and offer choices for what's next.
+              this.packCompletedPending = true;
+              const activeCount = this.state.players.size;
+              const available = ALL_PACKS
+                .filter((p) => activeCount >= p.minPlayers)
+                .map((p) => ({ id: p.id, name: p.name, minPlayers: p.minPlayers }));
+              this.clock.setTimeout(() => {
+                this.broadcast('packComplete', {
+                  completedPackId: this.selectedPack.id,
+                  completedPackName: this.selectedPack.name,
+                  recommendedNextId: getRecommendedNextPackId(this.selectedPack.id),
+                  availablePacks: available,
+                });
+              }, 4200);
             }
           }
         });
