@@ -1,7 +1,5 @@
 import { Client, Room } from 'colyseus.js';
-
-const SERVER_URL =
-  (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'ws://localhost:2567';
+import { SERVER_URL } from './endpoints';
 
 // ─── Client-side state shape ──────────────────────────────────────────────────
 // These mirror the server @colyseus/schema classes but are plain interfaces —
@@ -56,9 +54,26 @@ export interface NetworkGameState {
 export class ColyseusClient {
   private readonly client: Client;
   private room: Room | null = null;
+  private roomCode = '';
 
   constructor() {
     this.client = new Client(SERVER_URL);
+  }
+
+  /** 4-letter code of the current room; empty string until the server replies. */
+  getRoomCode(): string {
+    return this.roomCode;
+  }
+
+  /**
+   * Attaches a single low-level 'roomCode' listener. Registering here (instead
+   * of per-scene) means the message is captured as soon as the connection is
+   * live — no scene transition can race it away.
+   */
+  private captureRoomCode(room: Room): void {
+    room.onMessage('roomCode', (data: { code: string }) => {
+      this.roomCode = data.code;
+    });
   }
 
   async joinOrCreate(
@@ -66,6 +81,7 @@ export class ColyseusClient {
     options?: Record<string, unknown>,
   ): Promise<Room> {
     this.room = await this.client.joinOrCreate(roomName, options);
+    this.captureRoomCode(this.room);
     return this.room;
   }
 
@@ -74,6 +90,7 @@ export class ColyseusClient {
     options?: Record<string, unknown>,
   ): Promise<Room> {
     this.room = await this.client.create(roomName, options);
+    this.captureRoomCode(this.room);
     return this.room;
   }
 
@@ -82,6 +99,7 @@ export class ColyseusClient {
     options?: Record<string, unknown>,
   ): Promise<Room> {
     this.room = await this.client.join(roomName, options);
+    this.captureRoomCode(this.room);
     return this.room;
   }
 
@@ -105,6 +123,7 @@ export class ColyseusClient {
     options?: Record<string, unknown>,
   ): Promise<Room> {
     this.room = await this.client.joinById(roomId, options);
+    this.captureRoomCode(this.room);
     return this.room;
   }
 
@@ -117,5 +136,6 @@ export class ColyseusClient {
       await this.room.leave();
       this.room = null;
     }
+    this.roomCode = '';
   }
 }

@@ -1,16 +1,12 @@
 import Phaser from 'phaser';
 import { Room } from 'colyseus.js';
 import { ColyseusClient } from '../network/ColyseusClient';
+import { HTTP_URL } from '../network/endpoints';
+import { FONT, makeButton } from '../ui/theme';
 import { loadStoredAccount, clearStoredAccount } from './AuthScene';
 
 type MenuMode = 'main' | 'join' | 'spectate' | 'leaderboard' | 'connecting';
 type ConnectAction = 'create' | 'quickplay' | 'join' | 'spectate';
-
-const SERVER_URL =
-  (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'ws://localhost:2567';
-const HTTP_URL = SERVER_URL.replace(/^ws/, 'http');
-
-const FONT = { fontFamily: '"Press Start 2P"' };
 
 export class MenuScene extends Phaser.Scene {
   private network!: ColyseusClient;
@@ -393,19 +389,10 @@ export class MenuScene extends Phaser.Scene {
     return `${mins}:${String(secs).padStart(2, '0')}.${String(cs).padStart(2, '0')}`;
   }
 
-  // ─── Helper ────────────────────────────────────────────────────────────────
-
   private makeButton(
     x: number, y: number, label: string, color: string,
     onClick: () => void,
   ): Phaser.GameObjects.Text {
-    const btn = this.add.text(x, y, label, {
-      ...FONT, fontSize: '20px', color,
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-
-    btn.on('pointerover', () => btn.setColor('#ffffff'));
-    btn.on('pointerout', () => btn.setColor(color));
-    btn.on('pointerdown', onClick);
-    return btn;
+    return makeButton(this, x, y, label, color, onClick);
   }
 }

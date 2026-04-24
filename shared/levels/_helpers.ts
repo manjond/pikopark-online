@@ -194,20 +194,26 @@ export function fullHeightDoor(
   };
 }
 
-/** Floor-mounted spike trap. `width` is the danger strip length in pixels. */
+/**
+ * Floor-mounted lava strip. `width` is the danger strip length in pixels.
+ * The lava is rendered flush with the floor surface — its top edge sits at
+ * FLOOR_TOP, so visually it replaces the top of the ground tile. It still
+ * overlaps a player walking over it enough to trigger the trap.
+ */
 export function floorTrap(
   id: string,
   x: number,
   width: number = 96,
   linkedId: string = '',
 ): LevelObjectDef {
+  const LAVA_HEIGHT = 16; // half a tile — sits in the top of the ground band
   return {
     id,
     type: 'trap',
     x,
-    y: PLAYER_ON_FLOOR,
+    y: FLOOR_TOP + LAVA_HEIGHT / 2 - 4, // top = FLOOR_TOP - 4; bottom slightly into floor
     width,
-    height: TILE_SIZE,
+    height: LAVA_HEIGHT,
     requiredPlayers: 0,
     linkedId,
   };

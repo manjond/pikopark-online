@@ -5,8 +5,10 @@ import { playButtonPress, playDoorOpen } from '../utils/SoundSystem';
 const BUTTON_INACTIVE = 0xffff00;  // yellow — waiting for player
 const BUTTON_ACTIVE   = 0x00ff88;  // green  — pressed
 const DOOR_COLOR      = 0xcc3333;  // red    — closed barrier
-const TRAP_ACTIVE     = 0xff2200;  // red-orange — dangerous spikes
-const TRAP_INACTIVE   = 0x444444;  // grey — deactivated trap
+const LAVA_BASE       = 0xff5500;  // orange — lava body
+const LAVA_HOT        = 0xffcc22;  // yellow — hot bubbles
+const LAVA_DARK       = 0x882200;  // dark red — shadowed crust
+const TRAP_INACTIVE   = 0x444444;  // grey — deactivated lava (after button press)
 const SPRING_BASE     = 0x22cc88;  // green  — spring body
 const SPRING_ARROW    = 0xffffff;  // white  — arrow up indicator
 const PLATFORM_FILL   = 0xc88c32;  // warm amber — moving platforms stand out vs grey static tiles
@@ -27,6 +29,10 @@ export class InteractiveObject {
 
   /** Optional arrow glyph drawn on top of a spring pad. */
   private springArrow: Phaser.GameObjects.Triangle | null = null;
+
+  /** Lava visual extras — bubble arcs that pulse while the trap is active. */
+  private lavaBubbles: Phaser.GameObjects.Arc[] = [];
+  private lavaTopStrip: Phaser.GameObjects.Rectangle | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -106,8 +112,47 @@ export class InteractiveObject {
       });
 
     } else if (data.type === 'trap') {
-      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, TRAP_ACTIVE);
-      this.rect.setDepth(0);
+      // Main lava body — sits flush with the floor band (helpers put its top
+      // just a few pixels above FLOOR_TOP so collision still triggers).
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, LAVA_BASE);
+      this.rect.setStrokeStyle(1, LAVA_DARK);
+      this.rect.setDepth(2);
+
+      // Hot yellow crust along the top edge — sells the "molten surface" look.
+      const topY = data.y - data.height / 2 + 2;
+      this.lavaTopStrip = scene.add.rectangle(data.x, topY, data.width, 3, LAVA_HOT);
+      this.lavaTopStrip.setDepth(3);
+      scene.tweens.add({
+        targets: this.lavaTopStrip,
+        alpha: { from: 0.5, to: 1 },
+        duration: 500 + Math.random() * 200,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // A few bubbles drifting up along the strip.
+      const bubbleCount = Math.max(2, Math.floor(data.width / 24));
+      for (let i = 0; i < bubbleCount; i++) {
+        const bx = data.x - data.width / 2 + ((i + 0.5) * data.width) / bubbleCount;
+        const by = data.y - data.height / 4;
+        const r = 2 + Math.random() * 2;
+        const b = scene.add.circle(bx, by, r, LAVA_HOT, 0.9);
+        b.setDepth(4);
+        scene.tweens.add({
+          targets: b,
+          y: { from: by + 2, to: by - 4 },
+          alpha: { from: 0, to: 1 },
+          scaleX: { from: 0.4, to: 1 },
+          scaleY: { from: 0.4, to: 1 },
+          duration: 700 + Math.random() * 400,
+          delay: i * 120,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        this.lavaBubbles.push(b);
+      }
 
     } else if (data.type === 'platform') {
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, PLATFORM_FILL);
@@ -163,8 +208,11 @@ export class InteractiveObject {
         this.doorImg.body.enable = !data.activated;
       }
     } else if (this.type === 'trap') {
-      this.rect.setFillStyle(data.activated ? TRAP_INACTIVE : TRAP_ACTIVE);
-      this.rect.setAlpha(data.activated ? 0.35 : 1);
+      const cooled = data.activated; // linked button is held — lava hardens
+      this.rect.setFillStyle(cooled ? TRAP_INACTIVE : LAVA_BASE);
+      this.rect.setAlpha(cooled ? 0.4 : 1);
+      this.lavaTopStrip?.setVisible(!cooled);
+      this.lavaBubbles.forEach((b) => b.setVisible(!cooled));
     }
     // goal/spring have no sync state — goal spins, spring animates on bounce
     this.prevActivated = data.activated;
@@ -207,6 +255,8 @@ export class InteractiveObject {
     if (this.goalGlow)    { this.scene.tweens.killTweensOf(this.goalGlow);    this.goalGlow.destroy(); }
     if (this.goalLabel)   { this.scene.tweens.killTweensOf(this.goalLabel);   this.goalLabel.destroy(); }
     if (this.springArrow) { this.scene.tweens.killTweensOf(this.springArrow); this.springArrow.destroy(); }
+    if (this.lavaTopStrip) { this.scene.tweens.killTweensOf(this.lavaTopStrip); this.lavaTopStrip.destroy(); }
+    this.lavaBubbles.forEach((b) => { this.scene.tweens.killTweensOf(b); b.destroy(); });
 
     this.doorImg?.destroy();
   }

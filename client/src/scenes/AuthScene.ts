@@ -1,10 +1,6 @@
 import Phaser from 'phaser';
-
-const SERVER_URL =
-  (import.meta.env.VITE_SERVER_URL as string | undefined) ?? 'ws://localhost:2567';
-const HTTP_URL = SERVER_URL.replace(/^ws/, 'http');
-
-const FONT = { fontFamily: '"Press Start 2P"' };
+import { HTTP_URL } from '../network/endpoints';
+import { FONT, makeButton } from '../ui/theme';
 
 /** localStorage key where the currently-logged-in identity is cached. */
 export const ACCOUNT_STORAGE_KEY = 'pikopark_account';
@@ -288,13 +284,7 @@ export class AuthScene extends Phaser.Scene {
   private makeButton(
     x: number, y: number, label: string, color: string, onClick: () => void,
   ): Phaser.GameObjects.Text {
-    const btn = this.add.text(x, y, label, {
-      ...FONT, fontSize: '18px', color,
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-    btn.on('pointerover', () => btn.setColor('#ffffff'));
-    btn.on('pointerout', () => btn.setColor(color));
-    btn.on('pointerdown', onClick);
-    return btn;
+    return makeButton(this, x, y, label, color, onClick, '18px');
   }
 }
 

@@ -22,6 +22,7 @@ import {
   registerPlayerAnims,
 } from '../utils/PlayerTextures';
 import { playJump, playLevelComplete, playSpring, startBgMusic, stopBgMusic } from '../utils/SoundSystem';
+import { FONT } from '../ui/theme';
 
 interface GameSceneData {
   room?: Room;
@@ -331,14 +332,19 @@ export class GameScene extends Phaser.Scene {
     const room = this.room!;
 
     // ── Room code for HUD ─────────────────────────────────────────────────
-    room.onStateChange.once((s) => {
-      if (!this.scene.isActive('GameScene')) return;
-      const code = (s as NetworkGameState).roomCode;
-      if (code) this.time.delayedCall(50, () => this.ui()?.setConnected(code));
-    });
-    this.time.delayedCall(250, () => {
-      const code = (room.state as NetworkGameState).roomCode;
+    // The authoritative source is the network wrapper (captures the 'roomCode'
+    // message before any scene transition can race it). Schema reads are only
+    // a fallback in case the message is somehow missed.
+    const applyCode = (): void => {
+      const code = this.network.getRoomCode()
+        || (room.state as NetworkGameState).roomCode;
       if (code) this.ui()?.setConnected(code);
+    };
+    this.time.delayedCall(50, applyCode);
+    this.time.delayedCall(250, applyCode);
+    room.onStateChange.once(() => {
+      if (!this.scene.isActive('GameScene')) return;
+      applyCode();
     });
 
     // ── Player roster ─────────────────────────────────────────────────────
@@ -584,7 +590,6 @@ export class GameScene extends Phaser.Scene {
 
     const cx = GAME_WIDTH / 2;
     const cy = GAME_HEIGHT / 2;
-    const FONT = { fontFamily: '"Press Start 2P"' };
 
     const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.78).setDepth(20).setScrollFactor(0);
     const t1 = this.add.text(cx, cy - 140, 'LEVEL COMPLETE!', {
@@ -666,7 +671,6 @@ export class GameScene extends Phaser.Scene {
 
     const cx = GAME_WIDTH / 2;
     const cy = GAME_HEIGHT / 2;
-    const FONT = { fontFamily: '"Press Start 2P"' };
 
     const bg = this.add.rectangle(cx, cy, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.85)
       .setDepth(20).setScrollFactor(0);
@@ -736,7 +740,6 @@ export class GameScene extends Phaser.Scene {
     pack: { id: string; name: string; minPlayers: number },
     recommended: boolean,
   ): void {
-    const FONT = { fontFamily: '"Press Start 2P"' };
     const fill = recommended ? 0x1b4b1b : 0x202040;
     const stroke = recommended ? 0x88ff88 : 0x6666aa;
 

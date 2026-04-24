@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { Room } from 'colyseus.js';
 import { ColyseusClient } from '../network/ColyseusClient';
 import { PLAYER_COLORS, ALL_PACKS } from '@pikopark/shared';
+import { FONT } from '../ui/theme';
 
 interface LobbyData {
   room: Room;
@@ -25,7 +26,6 @@ interface LobbySpectator {
   name: string;
 }
 
-const FONT = { fontFamily: '"Press Start 2P"' };
 const MAX_CHAT = 7;
 
 /** Player-count categories shown in the left panel. */
@@ -259,6 +259,11 @@ export class LobbyScene extends Phaser.Scene {
       this.roomCodeText.setText(`CODE: ${data.code}`);
     });
 
+    // Network wrapper may already have the code cached if the roomCode message
+    // fired before this scene attached its own handler (race at mid-game join).
+    const cached = this.network.getRoomCode();
+    if (cached) this.roomCodeText.setText(`CODE: ${cached}`);
+
     this.room.onMessage('playerList', (data: { players: LobbyPlayer[]; spectators?: LobbySpectator[]; hostId: string }) => {
       if (!this.scene.isActive('LobbyScene')) return;
       this.lobbyPlayers = data.players;
@@ -270,12 +275,8 @@ export class LobbyScene extends Phaser.Scene {
     });
 
     this.room.onMessage('gameStart', (data: { packId?: string; levelId?: number; mapWidth?: number } = {}) => {
-      // Pull the room code we already displayed so GameScene can hand it
-      // straight to UIScene — avoids the "Connecting..." HUD that happened
-      // because GameScene's schema read of roomCode runs after the initial
-      // sync has already settled (no onStateChange fires).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const roomCode = (this.room.state as any)?.roomCode as string | undefined;
+      // roomCode arrives via message (not schema), so we pass the cached
+      // value straight into GameScene — UIScene can show it immediately.
       this.scene.start('GameScene', {
         room: this.room,
         network: this.network,
@@ -283,7 +284,7 @@ export class LobbyScene extends Phaser.Scene {
         packId: data.packId ?? this.selectedPackId,
         levelId: data.levelId,
         mapWidth: data.mapWidth,
-        roomCode,
+        roomCode: this.network.getRoomCode() || undefined,
       });
     });
 
@@ -299,12 +300,6 @@ export class LobbyScene extends Phaser.Scene {
     this.room.onMessage('startError', (data: { message: string }) => {
       this.packErrorText.setText(data.message);
     });
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cur = this.room.state as any;
-    if (cur?.roomCode) {
-      this.roomCodeText.setText(`CODE: ${String(cur.roomCode)}`);
-    }
 
     // Initial render of category + pack buttons
     this.rebuildCategoryButtons();
