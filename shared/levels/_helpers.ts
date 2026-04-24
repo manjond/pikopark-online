@@ -283,6 +283,68 @@ export function movingPlatform(
   };
 }
 
+/**
+ * Ice platform — blocks like a platform but players retain horizontal
+ * velocity after releasing movement keys (low-friction sliding). Use for
+ * puzzles where precision stopping is the challenge.
+ */
+export function icePlatform(x: number, yTop: number, width: number): SolidRect {
+  return { x, y: yTop, width, height: TILE_SIZE, tileType: 'ice' };
+}
+
+/**
+ * Fire bar — a rotating bar of fire segments pivoting around (x, y).
+ * Each segment is one tile long and kills on touch. `speedRadPerSec` sign
+ * chooses rotation direction (positive = counter-clockwise).
+ *
+ * Hit-test uses the line from pivot to tip, so the visual and hitbox match.
+ */
+export function fireBar(
+  id: string,
+  x: number,
+  y: number,
+  segments: number = 3,
+  speedRadPerSec: number = 2,
+  startAngleDeg: number = 0,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'firebar',
+    x,
+    y,
+    width: TILE_SIZE,     // used for the pivot visual
+    height: TILE_SIZE,
+    requiredPlayers: 0,
+    linkedId: '',
+    segments: Math.max(1, Math.min(8, Math.floor(segments))),
+    angleDeg: startAngleDeg,
+    power: speedRadPerSec, // reuse power field for rotation rate
+  };
+}
+
+/**
+ * Crumbling platform — acts as a solid platform until a player stands on it,
+ * then shakes for ~300 ms, falls (becomes non-solid) for ~2 s, and respawns.
+ * Server owns the state machine; clients render phase-based visuals.
+ */
+export function crumblePlatform(
+  id: string,
+  x: number,
+  yTop: number,
+  width: number = TILE_SIZE * 3,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'crumble',
+    x: x + width / 2,
+    y: yTop + TILE_SIZE / 2,
+    width,
+    height: TILE_SIZE,
+    requiredPlayers: 0,
+    linkedId: '',
+  };
+}
+
 /** Goal centered on top of a platform. */
 export function goalOnPlatform(id: string, platform: SolidRect): LevelObjectDef {
   return {

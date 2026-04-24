@@ -29,6 +29,12 @@ export function handlePlayerInput(
     player.velocityX = MOVE_SPEED;
     player.animation = 'walk';
     player.facing = 1;
+  } else if (player.onIce && player.isGrounded) {
+    // Ice: no instant snap on key release — decay slowly so the player slides.
+    // Airborne ice-launches still slide (velocityX preserved until grounded).
+    player.velocityX *= 0.985;
+    if (Math.abs(player.velocityX) < 5) player.velocityX = 0;
+    player.animation = Math.abs(player.velocityX) > 10 ? 'walk' : 'idle';
   } else {
     player.velocityX = 0;
     player.animation = 'idle';

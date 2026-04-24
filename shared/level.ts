@@ -1,6 +1,6 @@
 // ─── Level data types — used by both server (physics) and client (rendering) ──
 
-export type TileType = 'ground' | 'platform';
+export type TileType = 'ground' | 'platform' | 'ice';
 
 /** Axis-aligned rectangle defining a solid collision surface. Top-left origin. */
 export interface SolidRect {
@@ -31,7 +31,7 @@ export interface PlatformMotion {
 
 export interface LevelObjectDef {
   id: string;
-  type: 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform';
+  type: 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform' | 'firebar' | 'crumble';
   x: number;      // center x
   y: number;      // center y
   width: number;
@@ -45,6 +45,14 @@ export interface LevelObjectDef {
   power?: number;
   /** Only for type='platform' — defines the oscillation path. */
   motion?: PlatformMotion;
+  /** Only for type='firebar' — number of fire segments radiating from the pivot (1..8). */
+  segments?: number;
+  /**
+   * Only for type='firebar' — starting angle in degrees. Also doubles as the
+   * rotation rate scalar: positive = counter-clockwise, negative = clockwise.
+   * Rotation speed (rad/s) is stored in `power`.
+   */
+  angleDeg?: number;
 }
 
 export interface LevelData {

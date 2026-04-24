@@ -8,27 +8,36 @@ import {
 } from '@pikopark/shared';
 import { loadStoredAccount } from './AuthScene';
 
-type Tool = 'select' | 'ground' | 'platform' | 'spawn' | 'goal' | 'delete';
+type Tool = 'select' | 'ground' | 'platform' | 'ice' | 'spawn' | 'goal' | 'firebar' | 'crumble' | 'vplatform' | 'delete';
 
-const TOOL_ORDER: Tool[] = ['select', 'ground', 'platform', 'spawn', 'goal', 'delete'];
+const TOOL_ORDER: Tool[] = ['select', 'ground', 'platform', 'ice', 'spawn', 'goal', 'firebar', 'crumble', 'vplatform', 'delete'];
 const TOOL_LABELS: Record<Tool, string> = {
-  select: 'SELECT',
-  ground: 'GROUND',
-  platform: 'PLATFORM',
-  spawn: 'SPAWN',
+  select: 'SEL',
+  ground: 'GRND',
+  platform: 'PLAT',
+  ice: 'ICE',
+  spawn: 'SPWN',
   goal: 'GOAL',
-  delete: 'DELETE',
+  firebar: 'FIRE',
+  crumble: 'CRMB',
+  vplatform: 'VPLT',
+  delete: 'DEL',
 };
 const TOOL_COLORS: Record<Tool, string> = {
   select: '#cccccc',
   ground: '#8b5a2b',
   platform: '#00aa66',
+  ice: '#9fd9ff',
   spawn: '#ffcc66',
   goal: '#ffff00',
+  firebar: '#ff6622',
+  crumble: '#a88060',
+  vplatform: '#c88c32',
   delete: '#ff4466',
 };
 const TOOL_KEYS: Record<Tool, string> = {
-  select: '1', ground: '2', platform: '3', spawn: '4', goal: '5', delete: '6',
+  select: '1', ground: '2', platform: '3', ice: '4', spawn: '5', goal: '6',
+  firebar: '7', crumble: '8', vplatform: '9', delete: '0',
 };
 
 const GRID = TILE_SIZE; // snap step
@@ -104,9 +113,9 @@ export class EditorScene extends Phaser.Scene {
 
     // Tool palette across the top
     TOOL_ORDER.forEach((t, i) => {
-      const x = 16 + i * 130;
-      const btn = this.add.text(x, 24, `[${TOOL_KEYS[t]}] ${TOOL_LABELS[t]}`, {
-        ...FONT, fontSize: '11px', color: TOOL_COLORS[t],
+      const x = 16 + i * 90;
+      const btn = this.add.text(x, 24, `[${TOOL_KEYS[t]}]${TOOL_LABELS[t]}`, {
+        ...FONT, fontSize: '10px', color: TOOL_COLORS[t],
       }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
       btn.on('pointerover', () => { if (this.tool !== t) btn.setColor('#ffffff'); });
       btn.on('pointerout',  () => btn.setColor(this.tool === t ? '#ffffff' : TOOL_COLORS[t]));
@@ -249,7 +258,8 @@ export class EditorScene extends Phaser.Scene {
   private onPointerDown(p: Phaser.Input.Pointer): void {
     if (p.y < 48 || p.y > GAME_HEIGHT - 36) return; // UI strip
     const { x, y } = this.toWorld(p);
-    if (this.tool === 'ground' || this.tool === 'platform') {
+    if (this.tool === 'ground' || this.tool === 'platform' || this.tool === 'ice' ||
+        this.tool === 'crumble' || this.tool === 'vplatform') {
       this.dragStart = snap(x, y);
     } else if (this.tool === 'spawn') {
       this.doc.spawnPoints.push({ x: snapX(x), y: Math.min(snapY(y), FLOOR_Y - TILE_SIZE / 2) });
@@ -266,9 +276,62 @@ export class EditorScene extends Phaser.Scene {
         linkedId: '',
       });
       this.repaint();
+    } else if (this.tool === 'firebar') {
+      this.placeFireBar(snapX(x), snapY(y));
     } else if (this.tool === 'delete') {
       this.deleteAt(x, y);
     }
+  }
+
+  private placeFireBar(x: number, y: number): void {
+    const segStr = prompt('Fire bar segments (1-8):', '3');
+    if (segStr === null) return;
+    const speedStr = prompt('Rotation speed (rad/s, negative=clockwise):', '2');
+    if (speedStr === null) return;
+    const segments = Math.max(1, Math.min(8, Math.floor(Number(segStr) || 3)));
+    const speed = Number(speedStr) || 2;
+    const id = `fb${Date.now().toString(36)}`;
+    this.doc.objects.push({
+      id,
+      type: 'firebar',
+      x, y,
+      width: TILE_SIZE,
+      height: TILE_SIZE,
+      requiredPlayers: 0,
+      linkedId: '',
+      segments,
+      angleDeg: 0,
+      power: speed,
+    });
+    this.repaint();
+  }
+
+  private addVerticalPlatform(rect: { x: number; y: number; width: number; height: number }): void {
+    const rangeStr = prompt('Vertical travel distance (pixels, e.g. 128):', '128');
+    if (rangeStr === null) return;
+    const speedStr = prompt('Travel speed (px/s):', '80');
+    if (speedStr === null) return;
+    const travel = Math.max(TILE_SIZE, Math.floor(Number(rangeStr) || 128));
+    const speed = Math.max(10, Math.floor(Number(speedStr) || 80));
+    const startCenterY = rect.y + TILE_SIZE / 2;
+    const id = `mp${Date.now().toString(36)}`;
+    this.doc.objects.push({
+      id,
+      type: 'platform',
+      x: rect.x + rect.width / 2,
+      y: startCenterY,
+      width: rect.width,
+      height: TILE_SIZE,
+      requiredPlayers: 0,
+      linkedId: '',
+      motion: {
+        axis: 'y',
+        from: startCenterY,
+        to: Math.max(0, startCenterY - travel),
+        speed,
+      },
+    });
+    this.repaint();
   }
 
   private onPointerMove(p: Phaser.Input.Pointer): void {
@@ -276,7 +339,12 @@ export class EditorScene extends Phaser.Scene {
     const { x, y } = this.toWorld(p);
     const rect = rectFromDrag(this.dragStart, { x: snapX(x), y: snapY(y) });
     this.previewGfx.clear();
-    const color = this.tool === 'platform' ? 0x00aa66 : 0x8b5a2b;
+    const color =
+      this.tool === 'platform' ? 0x00aa66 :
+      this.tool === 'ice' ? 0x9fd9ff :
+      this.tool === 'crumble' ? 0xa88060 :
+      this.tool === 'vplatform' ? 0xc88c32 :
+      0x8b5a2b;
     this.previewGfx.fillStyle(color, 0.5);
     this.previewGfx.fillRect(rect.x, rect.y, rect.width, rect.height);
     this.previewGfx.lineStyle(2, 0xffffff, 0.7);
@@ -288,13 +356,37 @@ export class EditorScene extends Phaser.Scene {
     const start = this.dragStart;
     this.dragStart = null;
     this.previewGfx.clear();
-    if (this.tool !== 'ground' && this.tool !== 'platform') return;
+    const isRectTool =
+      this.tool === 'ground' || this.tool === 'platform' || this.tool === 'ice' ||
+      this.tool === 'crumble' || this.tool === 'vplatform';
+    if (!isRectTool) return;
     const { x, y } = this.toWorld(p);
     const rect = rectFromDrag(start, { x: snapX(x), y: snapY(y) });
     if (rect.width < GRID || rect.height < GRID) return;
-    const tileType: TileType = this.tool === 'ground' ? 'ground' : 'platform';
-    this.doc.solidRects.push({ ...rect, tileType });
-    this.repaint();
+    if (this.tool === 'ground' || this.tool === 'platform' || this.tool === 'ice') {
+      const tileType: TileType =
+        this.tool === 'ground' ? 'ground' :
+        this.tool === 'ice' ? 'ice' : 'platform';
+      this.doc.solidRects.push({ ...rect, tileType });
+      this.repaint();
+    } else if (this.tool === 'crumble') {
+      // Force height to 1 tile — crumble is always a single-tile-thick platform.
+      const snappedRect = { x: rect.x, y: rect.y, width: rect.width, height: TILE_SIZE };
+      const id = `cr${Date.now().toString(36)}`;
+      this.doc.objects.push({
+        id,
+        type: 'crumble',
+        x: snappedRect.x + snappedRect.width / 2,
+        y: snappedRect.y + TILE_SIZE / 2,
+        width: snappedRect.width,
+        height: TILE_SIZE,
+        requiredPlayers: 0,
+        linkedId: '',
+      });
+      this.repaint();
+    } else if (this.tool === 'vplatform') {
+      this.addVerticalPlatform({ x: rect.x, y: rect.y, width: rect.width, height: TILE_SIZE });
+    }
   }
 
   private onKeyDown(e: KeyboardEvent): void {
@@ -370,7 +462,10 @@ export class EditorScene extends Phaser.Scene {
     // Content
     this.contentGfx.clear();
     for (const r of this.doc.solidRects) {
-      const color = r.tileType === 'ground' ? 0x8b5a2b : 0x00aa66;
+      const color =
+        r.tileType === 'ground' ? 0x8b5a2b :
+        r.tileType === 'ice' ? 0x9fd9ff :
+        0x00aa66;
       this.contentGfx.fillStyle(color, 1);
       this.contentGfx.fillRect(r.x, r.y, r.width, r.height);
       this.contentGfx.lineStyle(1, 0xffffff, 0.15);
@@ -388,6 +483,38 @@ export class EditorScene extends Phaser.Scene {
         this.contentGfx.fillRect(o.x - o.width / 2, o.y - o.height / 2, o.width, o.height);
         this.contentGfx.lineStyle(2, 0xffffff, 1);
         this.contentGfx.strokeRect(o.x - o.width / 2, o.y - o.height / 2, o.width, o.height);
+      } else if (o.type === 'crumble') {
+        this.contentGfx.fillStyle(0xa88060, 1);
+        this.contentGfx.fillRect(o.x - o.width / 2, o.y - o.height / 2, o.width, o.height);
+        this.contentGfx.lineStyle(1, 0x5a3a20, 1);
+        this.contentGfx.strokeRect(o.x - o.width / 2, o.y - o.height / 2, o.width, o.height);
+      } else if (o.type === 'platform' && o.motion) {
+        // Moving platform: draw it at start position + dashed range line.
+        this.contentGfx.fillStyle(0xc88c32, 1);
+        this.contentGfx.fillRect(o.x - o.width / 2, o.y - o.height / 2, o.width, o.height);
+        this.contentGfx.lineStyle(1, 0x6a4010, 1);
+        this.contentGfx.strokeRect(o.x - o.width / 2, o.y - o.height / 2, o.width, o.height);
+        // Range indicator
+        this.contentGfx.lineStyle(1, 0xffaa66, 0.5);
+        if (o.motion.axis === 'y') {
+          this.contentGfx.lineBetween(o.x, o.motion.from, o.x, o.motion.to);
+        } else {
+          this.contentGfx.lineBetween(o.motion.from, o.y, o.motion.to, o.y);
+        }
+      } else if (o.type === 'firebar') {
+        const segs = o.segments ?? 3;
+        const length = segs * TILE_SIZE;
+        // Pivot
+        this.contentGfx.fillStyle(0x332222, 1);
+        this.contentGfx.fillCircle(o.x, o.y, 6);
+        // Segments at angle 0 (editor preview pose)
+        this.contentGfx.fillStyle(0xff4400, 0.9);
+        for (let i = 0; i < segs; i++) {
+          this.contentGfx.fillCircle(o.x + (i + 0.5) * TILE_SIZE, o.y, TILE_SIZE * 0.35);
+        }
+        // Reach arc (faint) so the editor can see the hitbox extent
+        this.contentGfx.lineStyle(1, 0xff6622, 0.25);
+        this.contentGfx.strokeCircle(o.x, o.y, length);
       }
     }
 
@@ -449,11 +576,15 @@ function containsPoint(
 
 function hintFor(t: Tool): string {
   switch (t) {
-    case 'select':   return 'Select: pan with arrow keys.';
-    case 'ground':   return 'Ground: drag to paint a solid block (lands-on + blocks sideways).';
-    case 'platform': return 'Platform: drag to paint a one-way platform (land from above).';
-    case 'spawn':    return 'Spawn: click to place a spawn point.';
-    case 'goal':     return 'Goal: click to place the gold goal (level has one).';
-    case 'delete':   return 'Delete: click on an object to remove it.';
+    case 'select':    return 'Select: pan with arrow keys.';
+    case 'ground':    return 'Ground: drag to paint a solid block (lands-on + blocks sideways).';
+    case 'platform':  return 'Platform: drag to paint a one-way platform (land from above).';
+    case 'ice':       return 'Ice: drag to paint a slippery platform — players slide on release.';
+    case 'spawn':     return 'Spawn: click to place a spawn point.';
+    case 'goal':      return 'Goal: click to place the gold goal (level has one).';
+    case 'firebar':   return 'Fire bar: click to place the pivot. Prompts for segments + speed.';
+    case 'crumble':   return 'Crumble: drag to paint a platform that falls when stepped on.';
+    case 'vplatform': return 'V-Platform: drag to paint the start pose. Prompts for travel + speed.';
+    case 'delete':    return 'Delete: click on an object to remove it.';
   }
 }

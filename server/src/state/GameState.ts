@@ -16,10 +16,23 @@ export class ObjectState extends Schema {
   @type('boolean') latching: boolean = false;
 
   /**
-   * Spring launch velocity (px/s, negative=upward). Server-only; not synced
-   * to clients — bounces are announced via the 'springBounce' broadcast.
+   * Spring launch velocity (px/s, negative=upward). Also reused as rotation
+   * rate (rad/s) for fire bars. Server-only; not synced through schema —
+   * bounces go via 'springBounce' and fire-bar angles via 'firebarAngles'.
    */
   power: number = 0;
+
+  // ── Fire bar (server-only) ────────────────────────────────────────────────
+  /** Number of fire segments radiating from the pivot. */
+  segments: number = 0;
+  /** Current rotation angle in radians — advanced each tick by `power`. */
+  angle: number = 0;
+
+  // ── Crumbling platform (server-only) ──────────────────────────────────────
+  /** 'intact' | 'shaking' | 'falling' | 'respawning'. Drives client visuals. */
+  crumblePhase: string = 'intact';
+  /** Milliseconds remaining in the current crumble phase. */
+  crumbleTimer: number = 0;
 
   // ── Moving-platform motion (server-only — not synced through schema, but
   //     broadcast every tick via the 'platformPositions' message). ─────────

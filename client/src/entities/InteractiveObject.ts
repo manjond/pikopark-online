@@ -13,6 +13,11 @@ const SPRING_BASE     = 0x22cc88;  // green  — spring body
 const SPRING_ARROW    = 0xffffff;  // white  — arrow up indicator
 const PLATFORM_FILL   = 0xc88c32;  // warm amber — moving platforms stand out vs grey static tiles
 const PLATFORM_STROKE = 0x6a4010;
+const FIREBAR_PIVOT   = 0x332222;
+const FIREBAR_CORE    = 0xffcc22;
+const FIREBAR_OUTER   = 0xff4400;
+const CRUMBLE_FILL    = 0xa88060;
+const CRUMBLE_STROKE  = 0x5a3a20;
 
 export class InteractiveObject {
   private readonly scene: Phaser.Scene;
@@ -29,6 +34,16 @@ export class InteractiveObject {
 
   /** Optional arrow glyph drawn on top of a spring pad. */
   private springArrow: Phaser.GameObjects.Triangle | null = null;
+
+  /** Fire bar: pivot center (x,y), segment count, and the rotating segment graphics. */
+  private fireBarSegments: Phaser.GameObjects.Arc[] = [];
+  private fireBarPivot: Phaser.GameObjects.Arc | null = null;
+  private fireBarCenterX = 0;
+  private fireBarCenterY = 0;
+  private fireBarSegmentCount = 0;
+
+  /** Crumble: current phase string + the visible rect (hidden when falling/respawning). */
+  private crumblePhase = 'intact';
 
   /** Lava visual extras — bubble arcs that pulse while the trap is active. */
   private lavaBubbles: Phaser.GameObjects.Arc[] = [];
@@ -178,6 +193,55 @@ export class InteractiveObject {
       );
       this.springArrow.setDepth(3);
 
+    } else if (data.type === 'firebar') {
+      // Invisible anchor rect so `this.rect` is always a Rectangle.
+      this.rect = scene.add.rectangle(data.x, data.y, 1, 1, 0, 0);
+      this.fireBarCenterX = data.x;
+      this.fireBarCenterY = data.y;
+      this.fireBarSegmentCount = Math.max(1, Math.min(8, data.segments ?? 3));
+
+      this.fireBarPivot = scene.add.circle(data.x, data.y, 6, FIREBAR_PIVOT);
+      this.fireBarPivot.setDepth(3);
+
+      const TILE = 32;
+      for (let i = 0; i < this.fireBarSegmentCount; i++) {
+        const distance = (i + 0.5) * TILE;
+        const circle = scene.add.circle(
+          data.x + distance,
+          data.y,
+          TILE * 0.45,
+          FIREBAR_OUTER,
+        );
+        circle.setDepth(3);
+        // Inner hot core
+        scene.tweens.add({
+          targets: circle,
+          alpha: { from: 0.85, to: 1 },
+          duration: 200 + i * 40,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        this.fireBarSegments.push(circle);
+      }
+      // Small inner core overlay on each segment
+      for (let i = 0; i < this.fireBarSegmentCount; i++) {
+        const distance = (i + 0.5) * TILE;
+        const inner = scene.add.circle(
+          data.x + distance,
+          data.y,
+          TILE * 0.22,
+          FIREBAR_CORE,
+        );
+        inner.setDepth(4);
+        this.fireBarSegments.push(inner);
+      }
+
+    } else if (data.type === 'crumble') {
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, CRUMBLE_FILL);
+      this.rect.setStrokeStyle(2, CRUMBLE_STROKE);
+      this.rect.setDepth(1);
+
     } else {
       // Door — full-height barrier
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, DOOR_COLOR);
@@ -224,6 +288,49 @@ export class InteractiveObject {
     this.rect.y = y;
   }
 
+  /** Rotate fire-bar segments to the given pivot angle (radians). */
+  setFireBarAngle(angle: number): void {
+    if (this.type !== 'firebar') return;
+    const TILE = 32;
+    const segCount = this.fireBarSegmentCount;
+    for (let i = 0; i < this.fireBarSegments.length; i++) {
+      const distance = ((i % segCount) + 0.5) * TILE;
+      this.fireBarSegments[i].x = this.fireBarCenterX + Math.cos(angle) * distance;
+      this.fireBarSegments[i].y = this.fireBarCenterY + Math.sin(angle) * distance;
+    }
+  }
+
+  /** Apply a crumble phase change (server broadcasts on phase transitions). */
+  setCrumblePhase(phase: string): void {
+    if (this.type !== 'crumble') return;
+    if (phase === this.crumblePhase) return;
+    this.crumblePhase = phase;
+    this.scene.tweens.killTweensOf(this.rect);
+    this.rect.setScale(1, 1);
+    this.rect.setAlpha(1);
+    this.rect.x = this.rect.x; // no-op to silence unused warnings on some builds
+
+    if (phase === 'intact') {
+      this.rect.setVisible(true);
+      this.rect.setFillStyle(CRUMBLE_FILL);
+    } else if (phase === 'shaking') {
+      this.rect.setVisible(true);
+      this.scene.tweens.add({
+        targets: this.rect,
+        scaleX: { from: 0.97, to: 1.03 },
+        duration: 60,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+    } else if (phase === 'falling') {
+      this.rect.setVisible(false);
+    } else if (phase === 'respawning') {
+      this.rect.setVisible(true);
+      this.rect.setAlpha(0.35);
+    }
+  }
+
   /** Play a brief squash animation on the spring pad (called on bounce). */
   playBounceAnim(): void {
     if (this.type !== 'spring') return;
@@ -257,6 +364,10 @@ export class InteractiveObject {
     if (this.springArrow) { this.scene.tweens.killTweensOf(this.springArrow); this.springArrow.destroy(); }
     if (this.lavaTopStrip) { this.scene.tweens.killTweensOf(this.lavaTopStrip); this.lavaTopStrip.destroy(); }
     this.lavaBubbles.forEach((b) => { this.scene.tweens.killTweensOf(b); b.destroy(); });
+
+    if (this.fireBarPivot) { this.fireBarPivot.destroy(); this.fireBarPivot = null; }
+    this.fireBarSegments.forEach((s) => { this.scene.tweens.killTweensOf(s); s.destroy(); });
+    this.fireBarSegments = [];
 
     this.doorImg?.destroy();
   }

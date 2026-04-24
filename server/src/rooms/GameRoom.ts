@@ -24,6 +24,17 @@ import {
 
 const FLOOR_Y = GAME_HEIGHT - TILE_SIZE - TILE_SIZE / 2; // player center when on ground
 
+/** Euclidean distance from point (px,py) to segment (ax,ay)-(bx,by). */
+function pointToSegmentDist(px: number, py: number, ax: number, ay: number, bx: number, by: number): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
 /** Number of physics sub-steps per server tick — reduces tunnelling. */
 const SUBSTEPS = 3;
 
@@ -42,6 +53,7 @@ export class GameRoom extends Room<GameState> {
   private levelCompleted = false;
   private hostId = '';
   private prevObjStates = new Map<string, boolean>();
+  private prevCrumblePhases = new Map<string, string>();
   private tickCount = 0;
   private trapRestartPending = false;
 
@@ -317,6 +329,7 @@ export class GameRoom extends Room<GameState> {
 
     this.state.interactiveObjects.clear();
     this.prevObjStates.clear();
+    this.prevCrumblePhases.clear();
     for (const def of levelData.objects) {
       const obj = new ObjectState();
       obj.id = def.id;
@@ -336,6 +349,14 @@ export class GameRoom extends Room<GameState> {
         obj.motionTo = def.motion.to;
         obj.motionSpeed = def.motion.speed;
         obj.motionPhase = 0;
+      }
+      if (def.type === 'firebar') {
+        obj.segments = def.segments ?? 3;
+        obj.angle = ((def.angleDeg ?? 0) * Math.PI) / 180;
+      }
+      if (def.type === 'crumble') {
+        obj.crumblePhase = 'intact';
+        obj.crumbleTimer = 0;
       }
       this.state.interactiveObjects.set(def.id, obj);
       this.prevObjStates.set(def.id, false);
@@ -388,6 +409,32 @@ export class GameRoom extends Room<GameState> {
     // ── Advance moving platforms ──────────────────────────────────────────────
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type === 'platform') obj.tickMotion(deltaTime);
+    });
+
+    // ── Advance fire bars (rotation only; collision happens post-integration) ──
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type !== 'firebar') return;
+      obj.angle += obj.power * dt;
+    });
+
+    // ── Advance crumble timers; handle state transitions ──────────────────────
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type !== 'crumble') return;
+      if (obj.crumbleTimer > 0) {
+        obj.crumbleTimer -= deltaTime;
+        if (obj.crumbleTimer <= 0) {
+          obj.crumbleTimer = 0;
+          if (obj.crumblePhase === 'shaking') {
+            obj.crumblePhase = 'falling';
+            obj.crumbleTimer = 2000;
+          } else if (obj.crumblePhase === 'falling') {
+            obj.crumblePhase = 'respawning';
+            obj.crumbleTimer = 800;
+          } else if (obj.crumblePhase === 'respawning') {
+            obj.crumblePhase = 'intact';
+          }
+        }
+      }
     });
 
     // ── Process pickup/throw requests (edge-triggered on interact press) ──────
@@ -453,6 +500,7 @@ export class GameRoom extends Room<GameState> {
             player.y = rect.y - TILE_SIZE / 2;
             player.velocityY = 0;
             player.isGrounded = true;
+            player.onIce = rect.tileType === 'ice';
             break;
           }
 
@@ -468,6 +516,33 @@ export class GameRoom extends Room<GameState> {
             break;
           }
         }
+
+        // Crumbling platforms — behave as one-way solids while intact/shaking.
+        // Landing on one transitions to 'shaking' (which after 300ms moves to
+        // 'falling' and becomes non-solid).
+        this.state.interactiveObjects.forEach((crumble) => {
+          if (crumble.type !== 'crumble') return;
+          if (crumble.crumblePhase !== 'intact' && crumble.crumblePhase !== 'shaking') return;
+          const cLft = crumble.x - crumble.width / 2;
+          const cRgt = crumble.x + crumble.width / 2;
+          const cTop = crumble.y - crumble.height / 2;
+          if (!(pRight > cLft && pLeft < cRgt)) return;
+
+          if (
+            player.velocityY >= 0 &&
+            currBottom >= cTop &&
+            prevBottom <= cTop + TILE_SIZE * 0.6
+          ) {
+            player.y = cTop - TILE_SIZE / 2;
+            player.velocityY = 0;
+            player.isGrounded = true;
+            player.onIce = false;
+            if (crumble.crumblePhase === 'intact') {
+              crumble.crumblePhase = 'shaking';
+              crumble.crumbleTimer = 400;
+            }
+          }
+        });
 
         // Moving platforms — treat as one-way solids, drag riders along.
         this.state.interactiveObjects.forEach((plat) => {
@@ -485,6 +560,7 @@ export class GameRoom extends Room<GameState> {
             player.y = pTop - TILE_SIZE / 2;
             player.velocityY = 0;
             player.isGrounded = true;
+            player.onIce = false;
             // Carry horizontal motion with the platform during this sub-step
             player.x += plat.platformVX * subDt;
             // Vertical lift: if platform moves up, push player up with it
@@ -497,6 +573,7 @@ export class GameRoom extends Room<GameState> {
           player.y = FLOOR_Y;
           player.velocityY = 0;
           player.isGrounded = true;
+          player.onIce = false;
         }
 
         // Door collision (solid AABB when closed)
@@ -676,6 +753,21 @@ export class GameRoom extends Room<GameState> {
           }
         });
       });
+
+      // Fire bar — kill on contact with the rotating segment line.
+      this.state.interactiveObjects.forEach((obj) => {
+        if (obj.type !== 'firebar' || this.trapRestartPending) return;
+        const length = obj.segments * TILE_SIZE;
+        const tipX = obj.x + Math.cos(obj.angle) * length;
+        const tipY = obj.y + Math.sin(obj.angle) * length;
+        const HIT_RADIUS = TILE_SIZE * 0.45;
+        this.state.players.forEach((player) => {
+          if (this.trapRestartPending) return;
+          const d = pointToSegmentDist(player.x, player.y, obj.x, obj.y, tipX, tipY);
+          if (d < HIT_RADIUS) this.trapRestartPending = true;
+        });
+      });
+
       if (this.trapRestartPending) {
         this.broadcast('trapHit', {});
         this.clock.setTimeout(() => { this.loadLevel(this.currentLevelIndex, true); }, 800);
@@ -776,6 +868,31 @@ export class GameRoom extends Room<GameState> {
       }
     });
     if (platformPositions.length > 0) this.broadcast('platformPositions', platformPositions);
+
+    // ── Broadcast fire-bar rotations every tick (schema doesn't sync angles) ──
+    const firebarAngles: Array<{ id: string; angle: number }> = [];
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type === 'firebar') firebarAngles.push({ id: obj.id, angle: obj.angle });
+    });
+    if (firebarAngles.length > 0) this.broadcast('firebarAngles', firebarAngles);
+
+    // ── Broadcast crumble phases (only when changed) ──────────────────────────
+    let crumbleChanged = false;
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type !== 'crumble') return;
+      const prev = this.prevCrumblePhases.get(obj.id);
+      if (prev !== obj.crumblePhase) {
+        crumbleChanged = true;
+        this.prevCrumblePhases.set(obj.id, obj.crumblePhase);
+      }
+    });
+    if (crumbleChanged) {
+      const crumblePhases: Array<{ id: string; phase: string }> = [];
+      this.state.interactiveObjects.forEach((obj) => {
+        if (obj.type === 'crumble') crumblePhases.push({ id: obj.id, phase: obj.crumblePhase });
+      });
+      this.broadcast('crumblePhases', crumblePhases);
+    }
 
     // ── Broadcast carry links (edge-triggered only, to save bandwidth) ─────────
     // Clients read this to show pickup/throw visuals.

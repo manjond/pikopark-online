@@ -472,6 +472,20 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // ── Fire bar rotations (server sends each tick; schema doesn't sync angle) ─
+    this.onRoomMessage<Array<{ id: string; angle: number }>>(room, 'firebarAngles', (list) => {
+      for (const a of list) {
+        this.interactiveObjects.get(a.id)?.setFireBarAngle(a.angle);
+      }
+    });
+
+    // ── Crumble phase transitions (server broadcasts on change) ────────────
+    this.onRoomMessage<Array<{ id: string; phase: string }>>(room, 'crumblePhases', (list) => {
+      for (const c of list) {
+        this.interactiveObjects.get(c.id)?.setCrumblePhase(c.phase);
+      }
+    });
+
     // ── Pickup/throw events — feedback sounds + floating label text ────────
     this.onRoomMessage<{ carrierId: string; carriedId: string }>(room, 'pickup', (data) => {
       this.showCarryFloater(data.carrierId, 'PICK UP', 0x88ddff);
@@ -526,6 +540,7 @@ export class GameScene extends Phaser.Scene {
           requiredPlayers: def.requiredPlayers,
           linkedId: def.linkedId,
           latching: def.latching ?? false,
+          segments: def.segments,
         },
         def.type === 'door' ? this.doorGroup : undefined,
       );
@@ -881,6 +896,22 @@ export class GameScene extends Phaser.Scene {
       g.generateTexture('tile_platform', TILE_SIZE, TILE_SIZE);
       g.destroy();
     }
+    if (!this.textures.exists('tile_ice')) {
+      const g = this.add.graphics();
+      g.fillStyle(0x9fd9ff);
+      g.fillRect(0, 0, TILE_SIZE, TILE_SIZE);
+      g.fillStyle(0xdff2ff);
+      g.fillRect(0, 0, TILE_SIZE, 3);
+      g.fillStyle(0x66aee0);
+      g.fillRect(0, TILE_SIZE - 2, TILE_SIZE, 2);
+      // Sparkle specks for contrast
+      g.fillStyle(0xffffff, 0.6);
+      g.fillRect(6, 10, 2, 2);
+      g.fillRect(20, 18, 2, 2);
+      g.fillRect(14, 24, 1, 1);
+      g.generateTexture('tile_ice', TILE_SIZE, TILE_SIZE);
+      g.destroy();
+    }
     if (!this.textures.exists('door_body')) {
       const g = this.add.graphics();
       g.fillStyle(0xffffff, 1);
@@ -1034,7 +1065,10 @@ export class GameScene extends Phaser.Scene {
 
   private buildSolidRects(solidRects: SolidRect[]): void {
     for (const rect of solidRects) {
-      const textureKey = rect.tileType === 'ground' ? 'tile_ground' : 'tile_platform';
+      const textureKey =
+        rect.tileType === 'ground' ? 'tile_ground' :
+        rect.tileType === 'ice' ? 'tile_ice' :
+        'tile_platform';
       const numTiles = Math.round(rect.width / TILE_SIZE);
       for (let i = 0; i < numTiles; i++) {
         const x = rect.x + i * TILE_SIZE + TILE_SIZE / 2;

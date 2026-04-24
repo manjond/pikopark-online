@@ -23,4 +23,10 @@ export class PlayerState extends Schema {
   prevInteract: boolean = false;
   /** Last non-zero walk direction, +1 right / -1 left. Used as throw facing. */
   facing: number = 1;
+  /**
+   * True when the player's last landed surface was `tileType: 'ice'`. Flipped
+   * by the physics tick each sub-step; read by handlePlayerInput to decide
+   * whether to snap or decay velocityX on key release.
+   */
+  onIce: boolean = false;
 }
