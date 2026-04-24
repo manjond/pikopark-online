@@ -184,6 +184,17 @@ export class GameScene extends Phaser.Scene {
     this.scene.launch('UIScene');
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.cleanup, this);
 
+    // HUD exit button → drop back to the menu. Registering on the game-level
+    // event bus (not UIScene's) keeps the listener alive across scene loads.
+    const onExit = (): void => this.exitToMenu();
+    this.game.events.on('hud:exit', onExit);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.game.events.off('hud:exit', onExit);
+    });
+
+    // Esc also exits — important when a map glitches into unreachable state.
+    this.input.keyboard!.on('keydown-ESC', onExit);
+
     // UIScene.create() runs on the next frame, so defer the HUD update by a
     // tick so the target text field exists.
     if (this.initialRoomCode) {
@@ -819,6 +830,15 @@ export class GameScene extends Phaser.Scene {
 
   private ui(): UIScene | null {
     return this.scene.get('UIScene') as UIScene | null;
+  }
+
+  /** Leaves the room and returns to the main menu. */
+  private exitToMenu(): void {
+    if (this.room !== null) {
+      void this.room.leave();
+      this.room = null;
+    }
+    this.scene.start('MenuScene');
   }
 
   // ─── Cleanup ──────────────────────────────────────────────────────────────────

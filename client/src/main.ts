@@ -6,6 +6,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { LobbyScene } from './scenes/LobbyScene';
 import { GameScene } from './scenes/GameScene';
 import { UIScene } from './scenes/UIScene';
+import { EditorScene } from './scenes/EditorScene';
 import { GAME_WIDTH, GAME_HEIGHT } from '@pikopark/shared';
 
 const config: Phaser.Types.Core.GameConfig = {
@@ -27,7 +28,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: import.meta.env.DEV,
     },
   },
-  scene: [BootScene, AuthScene, MenuScene, LobbyScene, GameScene, UIScene],
+  scene: [BootScene, AuthScene, MenuScene, LobbyScene, GameScene, UIScene, EditorScene],
 };
 
 new Phaser.Game(config);

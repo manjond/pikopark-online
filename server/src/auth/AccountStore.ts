@@ -2,6 +2,8 @@ import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
 
+export type AccountRole = 'admin' | 'user';
+
 interface StoredAccount {
   username: string;
   passwordHash: string; // hex-encoded scrypt output
@@ -17,6 +19,22 @@ interface AccountsFile {
 const USERNAME_RE = /^[A-Za-z0-9_]{3,20}$/;
 const MIN_PASSWORD_LEN = 6;
 const MAX_PASSWORD_LEN = 64;
+
+/**
+ * Comma-separated list of usernames that are treated as admin. Read once at
+ * module load. Set `ADMIN_USERNAMES=alice,bob` on the host env to promote
+ * multiple users; defaults to a single "admin" account.
+ */
+const ADMIN_USERNAMES: Set<string> = new Set(
+  (process.env['ADMIN_USERNAMES'] ?? 'admin')
+    .split(',')
+    .map((s) => s.trim().toLowerCase())
+    .filter((s) => s.length > 0),
+);
+
+function roleFor(username: string): AccountRole {
+  return ADMIN_USERNAMES.has(username.toLowerCase()) ? 'admin' : 'user';
+}
 
 /**
  * File-backed account store. Follows the same atomic-write/queue pattern
@@ -56,7 +74,7 @@ export class AccountStore {
     this.loaded = true;
   }
 
-  async register(username: string, password: string): Promise<{ ok: true; username: string } | { ok: false; error: string; code: number }> {
+  async register(username: string, password: string): Promise<{ ok: true; username: string; role: AccountRole } | { ok: false; error: string; code: number }> {
     const validation = this.validateCredentials(username, password);
     if (!validation.ok) return validation;
 
@@ -74,10 +92,10 @@ export class AccountStore {
       createdAt: new Date().toISOString(),
     };
     await this.flush();
-    return { ok: true, username };
+    return { ok: true, username, role: roleFor(username) };
   }
 
-  async login(username: string, password: string): Promise<{ ok: true; username: string } | { ok: false; error: string; code: number }> {
+  async login(username: string, password: string): Promise<{ ok: true; username: string; role: AccountRole } | { ok: false; error: string; code: number }> {
     const validation = this.validateCredentials(username, password);
     if (!validation.ok) return validation;
 
@@ -93,7 +111,19 @@ export class AccountStore {
     if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
       return { ok: false, error: 'Invalid username or password', code: 401 };
     }
-    return { ok: true, username: acct.username };
+    return { ok: true, username: acct.username, role: roleFor(acct.username) };
+  }
+
+  /**
+   * Re-verify a username+password and return their role. Used by admin
+   * endpoints that need "prove you're still this user" on every request —
+   * this project doesn't have session tokens, so we ask for the password
+   * each time an admin API is hit.
+   */
+  async verify(username: string, password: string): Promise<{ ok: true; role: AccountRole } | { ok: false; code: number; error: string }> {
+    const result = await this.login(username, password);
+    if (!result.ok) return result;
+    return { ok: true, role: result.role };
   }
 
   private validateCredentials(

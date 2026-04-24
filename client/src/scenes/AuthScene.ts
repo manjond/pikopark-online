@@ -5,9 +5,21 @@ import { FONT, makeButton } from '../ui/theme';
 /** localStorage key where the currently-logged-in identity is cached. */
 export const ACCOUNT_STORAGE_KEY = 'pikopark_account';
 
+export type AccountRole = 'admin' | 'user';
+
 export interface StoredAccount {
   username: string;
   isGuest: boolean;
+  role?: AccountRole;
+  /**
+   * Cached password for registered users. Admin endpoints re-verify
+   * credentials on every request (the project has no session tokens),
+   * so the client has to replay them. Guests and users without a
+   * persisted password are never eligible for admin routes. This is
+   * deliberately a minimal security model — the threat model is "prevent
+   * casual impersonation between friends", not "withstand attack".
+   */
+  password?: string;
 }
 
 type AuthMode = 'main' | 'register' | 'login' | 'busy';
@@ -258,20 +270,26 @@ export class AuthScene extends Phaser.Scene {
 
     this.showBusy(label);
 
+    const password = this.password;
     fetch(`${HTTP_URL}${endpoint}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: this.username, password: this.password }),
+      body: JSON.stringify({ username: this.username, password }),
     })
       .then(async (res) => {
-        const body = await res.json() as { username?: string; error?: string };
+        const body = await res.json() as { username?: string; role?: AccountRole; error?: string };
         if (!res.ok) {
           throw new Error(body.error ?? `HTTP ${res.status}`);
         }
         return body;
       })
       .then((body) => {
-        storeAccount({ username: body.username ?? this.username, isGuest: false });
+        storeAccount({
+          username: body.username ?? this.username,
+          isGuest: false,
+          ...(body.role ? { role: body.role } : {}),
+          password,
+        });
         this.scene.start('MenuScene');
       })
       .catch((err: Error) => {
@@ -301,7 +319,10 @@ export function loadStoredAccount(): StoredAccount | null {
     const o = parsed as Record<string, unknown>;
     if (typeof o['username'] !== 'string') return null;
     if (typeof o['isGuest'] !== 'boolean') return null;
-    return { username: o['username'], isGuest: o['isGuest'] };
+    const account: StoredAccount = { username: o['username'], isGuest: o['isGuest'] };
+    if (o['role'] === 'admin' || o['role'] === 'user') account.role = o['role'];
+    if (typeof o['password'] === 'string') account.password = o['password'];
+    return account;
   } catch {
     return null;
   }

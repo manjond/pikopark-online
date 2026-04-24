@@ -74,16 +74,47 @@ const MELODY_FREQS = [261, 329, 392, 329, 392, 440, 392, 523];
 const NOTE_DUR     = 0.28;  // seconds per note
 const LOOP_DUR     = MELODY_FREQS.length * NOTE_DUR; // ~2.24s
 
+const MUSIC_STORAGE_KEY = 'pikopark_music_volume';
+const BASE_MUSIC_GAIN   = 0.08; // the "full volume" point — chiptunes are loud raw
+
 let bgLooping = false;
 let bgTimer: ReturnType<typeof setTimeout> | null = null;
 // Master gain shared by all bg nodes so volume is consistent
 let bgGain: GainNode | null = null;
 
+/** Normalised music volume in [0, 1]. Persisted to localStorage. */
+let musicVolume = loadStoredVolume();
+
+function loadStoredVolume(): number {
+  try {
+    const raw = localStorage.getItem(MUSIC_STORAGE_KEY);
+    if (raw === null) return 1;
+    const v = Number(raw);
+    if (!Number.isFinite(v)) return 1;
+    return Math.min(1, Math.max(0, v));
+  } catch { return 1; }
+}
+
+function persistVolume(v: number): void {
+  try { localStorage.setItem(MUSIC_STORAGE_KEY, String(v)); }
+  catch { /* ignore quota / private mode */ }
+}
+
+export function getMusicVolume(): number {
+  return musicVolume;
+}
+
+export function setMusicVolume(v: number): void {
+  musicVolume = Math.min(1, Math.max(0, v));
+  persistVolume(musicVolume);
+  if (bgGain) bgGain.gain.value = BASE_MUSIC_GAIN * musicVolume;
+}
+
 function getBgGain(): GainNode {
   const c = getCtx();
   if (!bgGain) {
     bgGain = c.createGain();
-    bgGain.gain.value = 0.08;
+    bgGain.gain.value = BASE_MUSIC_GAIN * musicVolume;
     bgGain.connect(c.destination);
   }
   return bgGain;
@@ -131,6 +162,10 @@ function scheduleBgIteration(startTime: number): void {
 export function startBgMusic(): void {
   if (bgLooping) return;
   bgLooping = true;
+  // Force the gain to match the latest stored volume — important when
+  // switching scenes back and forth, or after a logout/login cycle.
+  const g = getBgGain();
+  g.gain.value = BASE_MUSIC_GAIN * musicVolume;
   scheduleBgIteration(getCtx().currentTime + 0.1);
 }
 
@@ -140,4 +175,8 @@ export function stopBgMusic(): void {
     clearTimeout(bgTimer);
     bgTimer = null;
   }
+}
+
+export function isBgMusicPlaying(): boolean {
+  return bgLooping;
 }

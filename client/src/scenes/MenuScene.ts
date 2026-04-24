@@ -3,6 +3,7 @@ import { Room } from 'colyseus.js';
 import { ColyseusClient } from '../network/ColyseusClient';
 import { HTTP_URL } from '../network/endpoints';
 import { FONT, makeButton } from '../ui/theme';
+import { VolumePanel } from '../ui/VolumePanel';
 import { loadStoredAccount, clearStoredAccount } from './AuthScene';
 
 type MenuMode = 'main' | 'join' | 'spectate' | 'leaderboard' | 'connecting';
@@ -74,10 +75,12 @@ export class MenuScene extends Phaser.Scene {
     // ── Account header (top-right) ─────────────────────────────────────────
     const acct = loadStoredAccount();
     const displayName = acct?.isGuest ? 'GUEST' : (acct?.username ?? 'GUEST');
+    const isAdmin = acct?.role === 'admin';
+    const roleTag = isAdmin ? ' [ADMIN]' : '';
     const accountLabel = this.add.text(
       this.cameras.main.width - 20, 20,
-      `logged in as ${displayName}`,
-      { ...FONT, fontSize: '10px', color: '#888888' },
+      `logged in as ${displayName}${roleTag}`,
+      { ...FONT, fontSize: '10px', color: isAdmin ? '#ffcc66' : '#888888' },
     ).setOrigin(1, 0);
     const logoutBtn = this.add.text(
       this.cameras.main.width - 20, 44, 'LOG OUT',
@@ -90,7 +93,23 @@ export class MenuScene extends Phaser.Scene {
       this.scene.start('AuthScene');
     });
 
-    this.mainGroup = this.add.group([title, createRoom, joinRoom, quickPlay, spectate, leaderboard, hint, accountLabel, logoutBtn]);
+    // ── Volume control (top-left, always visible) ──────────────────────────
+    const volumePanel = new VolumePanel(this, 16, 20);
+
+    const mainGroupItems: Phaser.GameObjects.GameObject[] = [
+      title, createRoom, joinRoom, quickPlay, spectate, leaderboard, hint,
+      accountLabel, logoutBtn, volumePanel.container,
+    ];
+
+    // ── Admin-only: Level Editor entry point ───────────────────────────────
+    if (isAdmin) {
+      const editorBtn = this.makeButton(cx, cy - 110, 'LEVEL EDITOR', '#ffcc66', () => {
+        this.scene.start('EditorScene');
+      });
+      mainGroupItems.push(editorBtn);
+    }
+
+    this.mainGroup = this.add.group(mainGroupItems);
 
     // ── Join-by-code group ──────────────────────────────────────────────────
     const joinTitle = this.add.text(cx, cy - 140, 'ENTER CODE', {
