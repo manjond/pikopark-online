@@ -74,6 +74,29 @@ export class AccountStore {
     this.loaded = true;
   }
 
+  /**
+   * Create or reset an account without the "already taken" check — used for
+   * the bootstrap admin. Idempotent: repeated calls just refresh the hash.
+   * Still runs validation so bad credentials from env vars fail loudly.
+   */
+  async upsert(username: string, password: string): Promise<{ ok: true; username: string; role: AccountRole } | { ok: false; error: string; code: number }> {
+    const validation = this.validateCredentials(username, password);
+    if (!validation.ok) return validation;
+
+    const key = username.toLowerCase();
+    const salt = crypto.randomBytes(16).toString('hex');
+    const passwordHash = crypto.scryptSync(password, salt, 64).toString('hex');
+    const existing = this.data.accounts[key];
+    this.data.accounts[key] = {
+      username,
+      passwordHash,
+      salt,
+      createdAt: existing?.createdAt ?? new Date().toISOString(),
+    };
+    await this.flush();
+    return { ok: true, username, role: roleFor(username) };
+  }
+
   async register(username: string, password: string): Promise<{ ok: true; username: string; role: AccountRole } | { ok: false; error: string; code: number }> {
     const validation = this.validateCredentials(username, password);
     if (!validation.ok) return validation;

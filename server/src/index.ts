@@ -177,8 +177,27 @@ if (fatal.length > 0) {
   process.exit(1);
 }
 
+/**
+ * Render's free tier has ephemeral disk — accounts.json is wiped on every
+ * redeploy. If `ADMIN_BOOTSTRAP_USER` + `ADMIN_BOOTSTRAP_PASS` are set, we
+ * upsert that account on startup so the admin login always works after a
+ * fresh deploy. Paired with `ADMIN_USERNAMES` to get the admin role.
+ */
+async function bootstrapAdmin(): Promise<void> {
+  const user = process.env['ADMIN_BOOTSTRAP_USER'];
+  const pass = process.env['ADMIN_BOOTSTRAP_PASS'];
+  if (!user || !pass) return;
+  const result = await accounts.upsert(user, pass);
+  if (result.ok) {
+    console.log(`[bootstrap] admin account "${result.username}" ready (role=${result.role})`);
+  } else {
+    console.error(`[bootstrap] admin upsert failed: ${result.error}`);
+  }
+}
+
 async function boot(): Promise<void> {
   await Promise.all([leaderboard.load(), accounts.load(), customLevels.load()]);
+  await bootstrapAdmin();
   httpServer.listen(port, () => {
     console.log(`[Colyseus] Listening on ws://localhost:${port}`);
   });

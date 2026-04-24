@@ -10,3 +10,14 @@ services:
         value: production
       - key: PORT
         value: 10000
+      # Comma-separated list of usernames that get `role: 'admin'` (level
+      # editor + /admin/* endpoints).
+      - key: ADMIN_USERNAMES
+        value: admin
+      # On boot, upsert this account with the value of ADMIN_BOOTSTRAP_PASS.
+      # Lets admin login survive Render's ephemeral-disk wipes. The password
+      # is NOT committed — set it in the Render dashboard.
+      - key: ADMIN_BOOTSTRAP_USER
+        value: admin
+      - key: ADMIN_BOOTSTRAP_PASS
+        sync: false
