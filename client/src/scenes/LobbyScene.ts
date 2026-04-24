@@ -97,6 +97,21 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   create(): void {
+    // Phaser scene instances are reused across `scene.start()` calls — the
+    // constructor doesn't re-run, so any field holding GameObjects from a
+    // previous visit will still point at destroyed objects. Reset anything
+    // that's stateful before touching it below.
+    this.categoryButtons = [];
+    this.lobbyPlayers = [];
+    this.lobbySpectators = [];
+    this.chatMessages = [];
+    this.typedMessage = '';
+    this.selectedCategory = 1;
+    this.selectedPackId = 'basics';
+    this.packScrollY = 0;
+    this.packContentHeight = 0;
+    this.isHost = false;
+
     const W = this.cameras.main.width;   // 1280
     const H = this.cameras.main.height;  // 720
 
