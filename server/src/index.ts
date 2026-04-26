@@ -37,7 +37,7 @@ app.options('/auth/login', (_req, res) => { res.sendStatus(204); });
 app.use('/admin', (_req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, x-auth-username, x-auth-password');
   next();
 });
 app.options('/admin/levels', (_req, res) => { res.sendStatus(204); });

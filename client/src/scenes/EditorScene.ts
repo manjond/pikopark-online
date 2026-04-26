@@ -233,6 +233,8 @@ export class EditorScene extends Phaser.Scene {
       .setScrollFactor(0).setDepth(101);
     const redoBtn = makeButton(this, GAME_WIDTH - 370, TOPBAR_H / 2, 'REDO', '#aaaaaa', () => this.redo(), '11px')
       .setScrollFactor(0).setDepth(101);
+    makeButton(this, GAME_WIDTH - 435, TOPBAR_H / 2, 'LOAD', '#ffcc66', () => { void this.openLoadDialog(); }, '11px')
+      .setScrollFactor(0).setDepth(101);
     // Refresh the label colour when the stacks change — done inside updateInfo.
     (this as unknown as { undoBtn: Phaser.GameObjects.Text }).undoBtn = undoBtn;
     (this as unknown as { redoBtn: Phaser.GameObjects.Text }).redoBtn = redoBtn;
@@ -482,6 +484,7 @@ export class EditorScene extends Phaser.Scene {
       // Resize handle hit-test first (if something already selected).
       const handle = this.hitHandle(world.x, world.y);
       if (handle && this.selection) {
+        this.pushUndo();
         this.drag = {
           kind: 'resize',
           selRef: this.selection,
@@ -499,6 +502,7 @@ export class EditorScene extends Phaser.Scene {
       if (picked) {
         const center = this.centerOf(picked);
         if (center) {
+          this.pushUndo();
           this.drag = { kind: 'move', selRef: picked, startWorld: world, initial: center };
         }
       }
@@ -1164,6 +1168,123 @@ export class EditorScene extends Phaser.Scene {
       console.warn('[EditorScene] save failed:', msg);
       this.setStatus(`Save failed: ${msg}`, '#ff6666');
     }
+  }
+
+  private async openLoadDialog(): Promise<void> {
+    const acct = loadStoredAccount();
+    if (!acct || !acct.password || acct.role !== 'admin') {
+      this.setStatus('Not authorised — log in again as admin.', '#ff6666');
+      return;
+    }
+
+    this.setStatus('Loading levels…', '#ffff00');
+    let levels: { author: string; slug: string; data: LevelData; updatedAt: string }[];
+    try {
+      const res = await fetch(`${HTTP_URL}/admin/levels`, {
+        headers: {
+          'Content-Type': 'application/json',
+          'x-auth-username': acct.username,
+          'x-auth-password': acct.password,
+        },
+      });
+      const body = await res.json() as { levels?: typeof levels; error?: string };
+      if (!res.ok) throw new Error(body.error ?? `HTTP ${res.status}`);
+      levels = body.levels ?? [];
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'unknown error';
+      this.setStatus(`Load failed: ${msg}`, '#ff6666');
+      return;
+    }
+
+    if (levels.length === 0) {
+      this.setStatus('No saved levels yet — SAVE one first.', '#aaaaaa');
+      return;
+    }
+
+    this.showLoadModal(levels);
+  }
+
+  /**
+   * Modal level picker. Lists each saved level as a clickable row;
+   * clicking dismisses the modal and loads the doc.
+   */
+  private showLoadModal(
+    levels: { author: string; slug: string; data: LevelData; updatedAt: string }[],
+  ): void {
+    const modalDepth = 200;
+    const overlay = this.add.rectangle(0, 0, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.7)
+      .setOrigin(0).setScrollFactor(0).setDepth(modalDepth)
+      .setInteractive();
+
+    const panelW = 520;
+    const panelH = Math.min(GAME_HEIGHT - 80, 80 + levels.length * 32);
+    const panelX = (GAME_WIDTH - panelW) / 2;
+    const panelY = (GAME_HEIGHT - panelH) / 2;
+    const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x1a2242, 1)
+      .setOrigin(0).setScrollFactor(0).setDepth(modalDepth + 1)
+      .setStrokeStyle(2, 0x88ccff);
+
+    const title = this.add.text(panelX + panelW / 2, panelY + 14, 'LOAD LEVEL', {
+      ...FONT, fontSize: '12px', color: '#ffffff',
+    }).setOrigin(0.5, 0).setScrollFactor(0).setDepth(modalDepth + 2);
+
+    const cleanup: Phaser.GameObjects.GameObject[] = [overlay, panel, title];
+    const dismiss = (): void => { for (const g of cleanup) g.destroy(); };
+
+    // Clicking the dim overlay (outside the panel) closes the dialog.
+    overlay.on('pointerdown', (_p: Phaser.Input.Pointer, x: number, y: number) => {
+      if (x < panelX || x > panelX + panelW || y < panelY || y > panelY + panelH) dismiss();
+    });
+
+    levels.forEach((entry, i) => {
+      const rowY = panelY + 44 + i * 30;
+      const row = this.add.rectangle(panelX + 10, rowY, panelW - 20, 26, 0x111625, 1)
+        .setOrigin(0).setScrollFactor(0).setDepth(modalDepth + 2)
+        .setStrokeStyle(1, 0x2a3150)
+        .setInteractive({ useHandCursor: true });
+
+      const date = entry.updatedAt ? entry.updatedAt.slice(0, 10) : '—';
+      const txt = this.add.text(panelX + 18, rowY + 13,
+        `${entry.data.name}   •   ${entry.data.minPlayers}p  w=${entry.data.mapWidth}   •   ${date}`, {
+        ...FONT, fontSize: '9px', color: '#cccccc',
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(modalDepth + 3);
+
+      row.on('pointerover', () => { row.setFillStyle(0x2a3e6a); txt.setColor('#ffffff'); });
+      row.on('pointerout',  () => { row.setFillStyle(0x111625); txt.setColor('#cccccc'); });
+      row.on('pointerdown', () => {
+        dismiss();
+        this.loadDoc(entry.data);
+        this.setStatus(`Loaded "${entry.data.name}".`, '#00ff88');
+      });
+
+      cleanup.push(row, txt);
+    });
+
+    const closeBtn = makeButton(this, panelX + panelW - 30, panelY + 14, 'X',
+      '#ff8888', dismiss, '12px')
+      .setOrigin(0.5, 0).setScrollFactor(0).setDepth(modalDepth + 2);
+    cleanup.push(closeBtn);
+  }
+
+  private loadDoc(data: LevelData): void {
+    this.pushUndo();
+    this.doc = {
+      id: data.id,
+      name: data.name,
+      minPlayers: data.minPlayers,
+      mapWidth: data.mapWidth,
+      // Defensive copies — never share refs with the LevelData payload.
+      solidRects:  data.solidRects.map(r => ({ ...r })),
+      spawnPoints: data.spawnPoints.map(s => ({ ...s })),
+      objects:     data.objects.map(o => ({
+        ...o,
+        motion: o.motion ? { ...o.motion } : undefined,
+      })),
+    };
+    this.cameraOffsetX = 0;
+    this.selection = null;
+    this.rebuildInspector();
+    this.repaint();
   }
 
   private confirmNew(): void {
