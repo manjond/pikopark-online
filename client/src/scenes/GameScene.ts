@@ -448,8 +448,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Level transition ───────────────────────────────────────────────────
-    this.onRoomMessage<{ levelId: number; mapWidth?: number }>(room, 'levelStart', (data) => {
-      this.rebuildLevel(data.levelId, data.mapWidth);
+    this.onRoomMessage<{ levelId: number; mapWidth?: number; restart?: boolean }>(room, 'levelStart', (data) => {
+      this.rebuildLevel(data.levelId, data.mapWidth, data.restart === true);
     });
 
     // ── Trap hit — flash red then server will restart ──────────────────────
@@ -551,7 +551,7 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private rebuildLevel(levelId: number, mapWidth?: number): void {
+  private rebuildLevel(levelId: number, mapWidth?: number, isDeathRestart: boolean = false): void {
     const allLevels: LevelData[] = ALL_PACKS.flatMap((p) => p.levels);
     const levelData = allLevels.find((l) => l.id === levelId) ?? ALL_PACKS[0]!.levels[0]!;
     const mw = mapWidth ?? levelData.mapWidth ?? GAME_WIDTH;
@@ -584,8 +584,12 @@ export class GameScene extends Phaser.Scene {
     // Fade back in — the complement of the fade-out fired on levelComplete
     this.cameras.main.fadeIn(420, 0, 0, 0);
 
-    this.levelStartTime = Date.now();
-    console.log(`[GameScene] Rebuilt → Level ${levelId}`);
+    // Death-respawns keep the HUD timer running — only fresh level entries
+    // (initial load, next level, lobby preview) reset to "now". Mirrors the
+    // server-side `levelStartMs` rule so the on-screen and leaderboard
+    // times stay in sync.
+    if (!isDeathRestart) this.levelStartTime = Date.now();
+    console.log(`[GameScene] Rebuilt → Level ${levelId}${isDeathRestart ? ' (death respawn)' : ''}`);
   }
 
   // ─── Level complete overlay ───────────────────────────────────────────────────

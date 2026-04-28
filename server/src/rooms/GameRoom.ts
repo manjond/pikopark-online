@@ -380,10 +380,17 @@ export class GameRoom extends Room<GameState> {
       spawnIndex++;
     });
 
-    this.levelStartMs = Date.now();
+    // Death-restarts (`restart=true` from trap/firebar hits) keep the timer
+    // running so deaths penalise the run instead of granting a fresh clock.
+    // Fresh-level entries (initial load, next-level advance, lobby preview)
+    // reset to "now". `continuePack` overrides this manually post-call.
+    if (!restart) this.levelStartMs = Date.now();
 
     if (levelIndex > 0 || restart) {
-      this.broadcast('levelStart', { levelId: levelData.id, mapWidth: this.mapWidth });
+      // `restart` flag tells the client this is a death-respawn, not a fresh
+      // level — the HUD timer should keep ticking instead of resetting so
+      // the on-screen value matches the server-side leaderboard time.
+      this.broadcast('levelStart', { levelId: levelData.id, mapWidth: this.mapWidth, restart });
       const objStates: Array<{ id: string; activated: boolean }> = [];
       this.state.interactiveObjects.forEach((obj) => {
         objStates.push({ id: obj.id, activated: obj.activated });
