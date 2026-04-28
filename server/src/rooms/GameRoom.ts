@@ -18,7 +18,7 @@ import {
   LevelData,
   LevelPack,
   ALL_PACKS,
-  PACK_BASICS,
+  PACK_SOLO_CADET,
   getRecommendedNextPackId,
 } from '@pikopark/shared';
 
@@ -58,7 +58,7 @@ export class GameRoom extends Room<GameState> {
   private trapRestartPending = false;
 
   // Pack selection — host can change this before game starts
-  private selectedPack: LevelPack = PACK_BASICS;
+  private selectedPack: LevelPack = PACK_SOLO_CADET;
   private gameStarted = false;
   private mapWidth = GAME_WIDTH; // current level's map width
 

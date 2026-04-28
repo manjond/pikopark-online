@@ -1,7 +1,8 @@
 import { LevelData } from '../level';
-import { TILE_SIZE } from '../constants';
 import {
-  floorSpring,
+  fireBar,
+  floorButton,
+  floorTrap,
   fullHeightDoor,
   goalOnFloor,
   groundRect,
@@ -10,41 +11,45 @@ import {
   standardSpawns,
 } from './_helpers';
 
-// Level 28 — "Bounce Relay"  (Pack: Bounce, 2 players)
-// Wide scrolling map. Two springs sit at opposite ends of the map, each
-// with a latching button on a high platform above it. Both buttons share
-// the same linkedId ('doorRelay28') — server AND-logic means the door
-// opens only when *both* buttons are activated. Two players must split
-// up, bounce simultaneously (or sequentially — buttons latch), then
-// regroup at the goal past the door.
+// Level 28 — "Throw of Faith"  (Pack: Duo Trust, 2 players)
+// Two throw moments separated by a pressure-and-firebar gauntlet:
+//   1. Carrier throws partner over the first lava chasm onto the perch.
+//      Partner drops down and walks to a pressure pad.
+//   2. With the pad held, the carrier sprints across the now-cold first
+//      chasm AND threads two firebars on the bridge to reach the second
+//      chasm. The carrier picks up partner again (partner steps off pad —
+//      lava re-arms behind, but no return is needed).
+//   3. Carrier throws partner over the second chasm onto the goal landing.
 
-const MAP_W = 1920;
-
-const PLAT_A = platformRect(128,  232, 256); // left station
-const PLAT_B = platformRect(1152, 232, 256); // right station
+const MAP_W = 2240;
+const PERCH_A = platformRect(640,  320, 192); // first throw target
+const PAD     = platformRect(896,  540, 128); // pressure pad after perch A
+const PERCH_B = platformRect(1856, 320, 192); // second throw target / goal landing
 
 export const LEVEL_28: LevelData = {
   id: 28,
-  name: 'Bounce Relay',
+  name: 'Throw of Faith',
   minPlayers: 2,
   mapWidth: MAP_W,
 
-  solidRects: [groundRect(MAP_W), PLAT_A, PLAT_B],
-
+  solidRects: [groundRect(MAP_W), PERCH_A, PAD, PERCH_B],
   spawnPoints: standardSpawns(),
 
   objects: [
-    // Left station
-    floorSpring('spring28a', 256),
-    platformButton('btn28a', PLAT_A, 'doorRelay28', {
-      latching: true, width: TILE_SIZE, yOffset: 4,
-    }),
-    // Right station
-    floorSpring('spring28b', 1280),
-    platformButton('btn28b', PLAT_B, 'doorRelay28', {
-      latching: true, width: TILE_SIZE, yOffset: 4,
-    }),
-    fullHeightDoor('doorRelay28', 1600),
-    goalOnFloor('goal28', 1800),
+    // First chasm — too wide for any normal jump.
+    floorTrap('trap28a', 528, 480),
+    // Pressure pad — held by the partner who lands on PERCH_A.
+    platformButton('btn28hold', PAD, 'trap28b', { width: 128 }),
+    // Second hazard strip — only cold while pad is held.
+    floorTrap('trap28b', 1232, 320),
+    fireBar('fb28a', 1152, 460, 2, 1.6,  0),
+    fireBar('fb28b', 1408, 460, 2, -1.6, 90),
+    // Latching button on the spawn rim — flips the goal door open after
+    // the second throw lands the partner near the door. Reachable by
+    // the carrier *before* the first throw, so the carrier presses it
+    // pre-emptively.
+    floorButton('btn28latch', 96, 'door28', { latching: true }),
+    fullHeightDoor('door28', 2080),
+    goalOnFloor('goal28', 2176),
   ],
 };

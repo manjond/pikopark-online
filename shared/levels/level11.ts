@@ -1,35 +1,43 @@
 import { LevelData } from '../level';
 import {
-  floorButton,
-  fullHeightDoor,
-  goalOnFloor,
+  fireBar,
+  floorTrap,
+  goalOnPlatform,
   groundRect,
+  platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 11 — "Four Keys"  (Pack: Squad, 4 players)
-// 4 latching buttons spread across the map — each player picks one and
-// presses it. The door only opens once *all four* are active (AND logic),
-// then stays open so everyone can reach the goal.
+// Level 11 — "Storm"  (Pack: Solo Master, 1 player)
+// Wide map (1920) packed with five firebars at varying heights and pivots.
+// Three lava strips below punish missteps. Two static platforms break the
+// run — the first lets you read the early bars, the second is a checkpoint
+// before the goal mesa.
 
-const MAP_W = 1280;
+const MAP_W = 1920;
+const REST_A   = platformRect(384,  540, 160);
+const REST_B   = platformRect(1120, 540, 160);
+const GOAL_PAD = platformRect(1696, 460, 192);
 
 export const LEVEL_11: LevelData = {
   id: 11,
-  name: 'Four Keys',
-  minPlayers: 4,
+  name: 'Storm',
+  minPlayers: 1,
   mapWidth: MAP_W,
 
-  solidRects: [groundRect(MAP_W)],
-
+  solidRects: [groundRect(MAP_W), REST_A, REST_B, GOAL_PAD],
   spawnPoints: standardSpawns(),
 
   objects: [
-    floorButton('btn11a', 128, 'door11', { latching: true }),
-    floorButton('btn11b', 256, 'door11', { latching: true }),
-    floorButton('btn11c', 384, 'door11', { latching: true }),
-    floorButton('btn11d', 512, 'door11', { latching: true }),
-    fullHeightDoor('door11', 704),
-    goalOnFloor('goal11', 1152),
+    floorTrap('trap11a', 336,  128),
+    floorTrap('trap11b', 768,  192),
+    floorTrap('trap11c', 1408, 160),
+    // Five firebars: short ones in the floor band, long ones up high.
+    fireBar('fb11a', 240,  580, 2, 1.4,  0),
+    fireBar('fb11b', 576,  440, 3, -1.2, 60),
+    fireBar('fb11c', 864,  580, 2, 1.6,  120),
+    fireBar('fb11d', 1280, 440, 3, -1.5, 180),
+    fireBar('fb11e', 1568, 540, 2, 2.0,  240),
+    goalOnPlatform('goal11', GOAL_PAD),
   ],
 };

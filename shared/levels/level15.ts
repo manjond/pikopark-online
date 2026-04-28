@@ -1,69 +1,73 @@
 import { LevelData } from '../level';
 import {
-  floorButton,
-  fullHeightDoor,
-  goalOnPlatform,
+  crumblePlatform,
+  fireBar,
+  floorSpring,
+  floorTrap,
+  goalOnFloor,
   groundRect,
-  platformButton,
+  icePlatform,
+  movingPlatform,
   platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 15 — "Summit"  (Pack: Squad, 4 players — grand finale)
-// Wide 3200px map. Combines ALL mechanics:
-//   • 4 latching buttons to split up and press (section 1)
-//   • 3-player stacking puzzle (section 2, 3-stack-only zone at y=370)
-//   • Pressure-hold relay over a wide gap (section 3)
-//   • 4 latching buttons again before the final door (section 4)
-//
-// All cross-section buttons are latching so the team can regroup; the only
-// pressure-hold is section 3, where one player stays on btn15f while the
-// others complete the path — standard "one holds, the rest finish" pattern.
+// Level 15 — "Mirror Run"  (Pack: Solo Master, 1 player — finale)
+// Two parallel hazard lanes converge at the goal. The lower lane is mostly
+// crumbles + lava with a vertical lift; the upper lane is ice + ferry +
+// firebars. You only need to clear ONE lane, but both look terrifying —
+// the lower is faster, the upper is more forgiving once you commit.
 
-const MAP_W = 3200;
-
-const STACK3_PLAT = platformRect(1152, 370, 192); // 3-stack-only
-const GOAL_PLAT   = platformRect(2880, 480, 256);
+const MAP_W = 2240;
+const UPPER_DOCK = platformRect(64,   460, 192);
+const UPPER_LIP  = platformRect(2016, 380, 192);
+const LOWER_LIP  = platformRect(1856, 565, 160);
 
 export const LEVEL_15: LevelData = {
   id: 15,
-  name: 'Summit',
-  minPlayers: 4,
+  name: 'Mirror Run',
+  minPlayers: 1,
   mapWidth: MAP_W,
 
   solidRects: [
     groundRect(MAP_W),
-    STACK3_PLAT,
-    // Section 2 — stepping stone approach
-    platformRect(960,  540, 160),
-    // Section 3 — relay stepping stones
-    platformRect(1792, 560, 160),
-    platformRect(2048, 520, 160),
-    GOAL_PLAT,
+    UPPER_DOCK,
+    UPPER_LIP,
+    LOWER_LIP,
+    icePlatform(800, 380, 320),
   ],
 
   spawnPoints: standardSpawns(),
 
   objects: [
-    // Section 1 — four latching floor buttons (AND logic: all four must be pressed)
-    floorButton('btn15a', 192, 'door15a', { latching: true }),
-    floorButton('btn15b', 320, 'door15a', { latching: true }),
-    floorButton('btn15c', 448, 'door15a', { latching: true }),
-    floorButton('btn15d', 576, 'door15a', { latching: true }),
-    fullHeightDoor('door15a', 768),
-    // Section 2 — 3-stack latching button
-    platformButton('btn15e', STACK3_PLAT, 'door15b', { latching: true }),
-    fullHeightDoor('door15b', 1472),
-    // Section 3 — relay (holder + latcher)
-    floorButton('btn15f', 1664, 'door15c'),
-    floorButton('btn15g', 2240, 'door15c', { latching: true }),
-    fullHeightDoor('door15c', 2432),
-    // Section 4 — four latching floor buttons (AND logic)
-    floorButton('btn15h', 2624, 'door15d', { latching: true }),
-    floorButton('btn15i', 2688, 'door15d', { latching: true }),
-    floorButton('btn15j', 2752, 'door15d', { latching: true }),
-    floorButton('btn15k', 2816, 'door15d', { latching: true }),
-    fullHeightDoor('door15d', 3008),
-    goalOnPlatform('goal15', GOAL_PLAT),
+    // Lower lane — long lava + crumble bridge + vertical lift.
+    floorTrap('trap15low', 1124, 1700),
+    crumblePlatform('cr15a',  448, 565, 96),
+    crumblePlatform('cr15b',  672, 565, 96),
+    crumblePlatform('cr15c',  896, 565, 96),
+    crumblePlatform('cr15d', 1408, 565, 96),
+    crumblePlatform('cr15e', 1632, 565, 96),
+    movingPlatform('mp15low', 1120, 460, 96, {
+      axis: 'y',
+      from: 460 + 16,
+      to:   300 + 16,
+      speed: 130,
+    }),
+
+    // Upper lane — spring up from dock, ride ferry, ice plate, leap onto
+    // the high lip near the goal.
+    floorSpring('spring15', 96),
+    movingPlatform('mp15hi', 320, 360, 128, {
+      axis: 'x',
+      from: 320 + 64,
+      to:   640 + 64,
+      speed: 200,
+    }),
+    fireBar('fb15a', 480, 280, 3, 1.6,  0),
+    fireBar('fb15b', 960, 280, 3, -1.4, 90),
+    fireBar('fb15c', 1472, 360, 2, 1.8, 45),
+
+    // Both lanes deposit you near the right wall — sprint to the goal.
+    goalOnFloor('goal15', 2176),
   ],
 };

@@ -1,33 +1,33 @@
 import { LevelData } from '../level';
 import {
-  floorButton,
-  fullHeightDoor,
-  goalOnPlatform,
+  floorTrap,
+  goalOnFloor,
   groundRect,
-  platformRect,
+  icePlatform,
   standardSpawns,
 } from './_helpers';
 
-// Level 4 — "Chain"  (Pack: Basics, 1 player)
-// Sequential button chain. Press button A (latching) → door A opens.
-// Inside find button B (latching) → door B opens. Goal on elevated platform.
-
-const GOAL_PLAT = platformRect(960, 460, 224);
+// Level 4 — "Slip Spike"  (Pack: Solo Cadet, 1 player)
+// Two ice runways hang above two lava lakes. The spawn rim is bare floor;
+// you have to commit to each ice runway and brake at the gap of bare
+// floor between them — overshoot and the second lava strip ends you.
 
 export const LEVEL_4: LevelData = {
   id: 4,
-  name: 'Chain',
+  name: 'Slip Spike',
   minPlayers: 1,
 
-  solidRects: [groundRect(), GOAL_PLAT],
+  solidRects: [
+    groundRect(),
+    icePlatform(288, 565, 384),  // ice over the first lava
+    icePlatform(800, 565, 384),  // ice over the second lava
+  ],
 
   spawnPoints: standardSpawns(),
 
   objects: [
-    floorButton('btn4a', 299, 'door4a', { latching: true }),
-    fullHeightDoor('door4a', 512),
-    floorButton('btn4b', 726, 'door4b', { latching: true }),
-    fullHeightDoor('door4b', 896),
-    goalOnPlatform('goal4', GOAL_PLAT),
+    floorTrap('trap4a', 480, 384),
+    floorTrap('trap4b', 992, 384),
+    goalOnFloor('goal4', 1200),
   ],
 };

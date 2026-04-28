@@ -1,52 +1,44 @@
 import { LevelData } from '../level';
 import {
-  floorButton,
-  fullHeightDoor,
+  fireBar,
+  floorTrap,
   goalOnPlatform,
   groundRect,
-  platformButton,
+  movingPlatform,
   platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 10 — "Pinnacle"  (Pack: Duo, 2 players — hardest)
-// 1920px wide. Combines all duo mechanics in one continuous puzzle:
-//   • Stacking-only button A (latching) unlocks door A
-//   • Floor button B (latching) unlocks door B
-//   • Beyond door B: stacking-only platform with latching button C
-//   • All three doors open → goal reachable
-// All buttons latching so the 2-player session can always complete — if any
-// were pressure-only the holder would get stuck before the next puzzle.
+// Level 10 — "Vertical Trial"  (Pack: Solo Adept, 1 player)
+// A wide lava lake leaves no floor to walk on. A vertical lift carries you
+// upward through the airspace of two firebars. Step off onto the goal mesa
+// at the lift's apex. The lift returns to the dock automatically — patient
+// timing beats fast reflexes here.
 
-const MAP_W = 1920;
-
-const PLAT_A    = platformRect(192,  405, 160); // stacking-only
-const PLAT_C    = platformRect(1344, 395, 160); // stacking-only
-const GOAL_PLAT = platformRect(1664, 480, 192);
+const DOCK     = platformRect(64, 580, 96);   // safe boarding pad over the lava
+const GOAL_PAD = platformRect(1056, 300, 192);
 
 export const LEVEL_10: LevelData = {
   id: 10,
-  name: 'Pinnacle',
-  minPlayers: 2,
-  mapWidth: MAP_W,
+  name: 'Vertical Trial',
+  minPlayers: 1,
 
-  solidRects: [
-    groundRect(MAP_W),
-    PLAT_A,
-    platformRect(640, 550, 160),   // stepping stone between door A and B
-    PLAT_C,
-    GOAL_PLAT,
-  ],
-
+  solidRects: [groundRect(), DOCK, GOAL_PAD],
   spawnPoints: standardSpawns(),
 
   objects: [
-    platformButton('btn10a', PLAT_A, 'door10a', { latching: true }),
-    fullHeightDoor('door10a', 448),
-    floorButton('btn10b', 832, 'door10b', { latching: true }),
-    fullHeightDoor('door10b', 1024),
-    platformButton('btn10c', PLAT_C, 'door10c', { latching: true }),
-    fullHeightDoor('door10c', 1600),
-    goalOnPlatform('goal10', GOAL_PLAT),
+    // Lava covers everything except the spawn rim and the dock.
+    floorTrap('trap10', 720, 896),
+    // Lift rises from the dock height (yTop≈580) to just above the goal pad
+    // top (320). Slow speed = a deliberate ride.
+    movingPlatform('mp10', 192, 580, 128, {
+      axis: 'y',
+      from: 580 + 16,
+      to:   320 + 16,
+      speed: 90,
+    }),
+    fireBar('fb10a', 480, 460, 3, 1.4, 0),
+    fireBar('fb10b', 800, 360, 3, -1.6, 90),
+    goalOnPlatform('goal10', GOAL_PAD),
   ],
 };

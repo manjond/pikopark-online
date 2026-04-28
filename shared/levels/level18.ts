@@ -1,40 +1,51 @@
 import { LevelData } from '../level';
 import {
+  crumblePlatform,
+  fireBar,
+  floorButton,
   floorTrap,
   fullHeightDoor,
-  goalOnPlatform,
+  goalOnFloor,
   groundRect,
-  platformButton,
   platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 18 — "Stacked Danger"  (Pack: Hazards, 2 players)
-// Stacking-only button on a high platform. Spike strips guard the approach.
-// Navigate the spikes carefully before stacking.
-//
-// Physics: BTN_PLAT top = 395 (stacking-only zone: STACK2_FEET_PEAK ≤ 395 < SOLO_FEET_PEAK)
+// Level 18 — "Pressure Pact"  (Pack: Duo Allies, 2 players)
+// Real teamwork without stacking gymnastics. Player A jumps onto a small
+// pressure pedestal and stays — that pad is the only thing keeping the
+// wide lava lake on B's path cool. While A holds, B threads a firebar at
+// pace, lands on a shaky crumble plate, and slaps the latching button
+// that unlocks the goal door. A's job ends only after the latch flips —
+// any earlier and B falls into the lake.
 
-const BTN_PLAT  = platformRect(512, 395, 192); // stacking-only
-const GOAL_PLAT = platformRect(896, 472, 224); // solo-reachable
+const MAP_W = 1280;
+const PEDESTAL = platformRect(64, 540, 128); // A's perch — a small stage to commit to
 
 export const LEVEL_18: LevelData = {
   id: 18,
-  name: 'Stacked Danger',
+  name: 'Pressure Pact',
   minPlayers: 2,
+  mapWidth: MAP_W,
 
-  solidRects: [groundRect(), BTN_PLAT, GOAL_PLAT],
-
+  solidRects: [groundRect(MAP_W), PEDESTAL],
   spawnPoints: standardSpawns(),
 
   objects: [
-    // Spikes guarding the stack zone — must jump over to position
-    floorTrap('trap18a', 384, 64),
-    // Stacking-only button
-    platformButton('btn18', BTN_PLAT, 'door18'),
-    fullHeightDoor('door18', 768),
-    // Spikes on the path to the goal platform — jump onto the platform
-    floorTrap('trap18b', 992, 64),
-    goalOnPlatform('goal18', GOAL_PLAT),
+    // Pressure pad on the pedestal — A jumps up here to hold it.
+    floorButton('btn18hold', 128, 'trap18', { width: 96 }),
+    // The lake B has to cross — wide enough that a running jump clears it,
+    // but only barely. With the lava cold (button held) it's a sprint;
+    // armed, it's instant death.
+    floorTrap('trap18', 512, 320),
+    // Firebar in the airspace above the cold lake — forces B to read its
+    // sweep before committing to the run.
+    fireBar('fb18', 512, 460, 3, 1.4, 90),
+    // Crumble plate on the far side: B's first foothold after the dash.
+    crumblePlatform('cr18', 720, 565, 96),
+    // Latching button on the floor past the crumbles — opens the goal door.
+    floorButton('btn18latch', 928, 'door18', { latching: true }),
+    fullHeightDoor('door18', 1088),
+    goalOnFloor('goal18', 1216),
   ],
 };

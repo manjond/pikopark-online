@@ -1,39 +1,32 @@
 import { LevelData } from '../level';
 import {
-  fullHeightDoor,
-  goalOnPlatform,
+  fireBar,
+  goalOnFloor,
   groundRect,
-  platformButton,
-  platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 8 — "Double Stack"  (Pack: Duo, 2 players)
-// Two stacking-only platforms in sequence, each with a latching button.
-// Both must be activated (via stacking) before the final door opens.
-// Because buttons are latching, only ONE player needs to reach each — but
-// stacking IS required to get there.
-
-const MAP_W = 1280;
-
-const PLAT_A    = platformRect(224, 410, 160); // stacking-only
-const PLAT_B    = platformRect(672, 395, 160); // stacking-only, harder
-const GOAL_PLAT = platformRect(992, 470, 192); // solo-reachable
+// Level 8 — "Pendulum Hall"  (Pack: Solo Adept, 1 player)
+// A corridor of four firebars at floor level, each rotating in opposite
+// directions. There are no platforms — you walk on the floor, but every
+// few tiles a blade arcs into the path. Read each rotation, dash through
+// the gap, then read the next.
 
 export const LEVEL_8: LevelData = {
   id: 8,
-  name: 'Double Stack',
-  minPlayers: 2,
-  mapWidth: MAP_W,
+  name: 'Pendulum Hall',
+  minPlayers: 1,
 
-  solidRects: [groundRect(MAP_W), PLAT_A, PLAT_B, GOAL_PLAT],
-
+  solidRects: [groundRect()],
   spawnPoints: standardSpawns(),
 
   objects: [
-    platformButton('btn8a', PLAT_A, 'door8', { latching: true }),
-    platformButton('btn8b', PLAT_B, 'door8', { latching: true }),
-    fullHeightDoor('door8', 853),
-    goalOnPlatform('goal8', GOAL_PLAT),
+    // 4 firebars spread across the corridor — alternating directions plus
+    // a phase offset on every other pivot, so safe windows never line up.
+    fireBar('fb8a', 304, 580, 2, 1.5, 0),
+    fireBar('fb8b', 528, 580, 2, -1.5, 60),
+    fireBar('fb8c', 752, 580, 2, 1.8, 120),
+    fireBar('fb8d', 976, 580, 2, -1.8, 180),
+    goalOnFloor('goal8', 1200),
   ],
 };

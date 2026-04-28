@@ -1,59 +1,55 @@
 import { LevelData } from '../level';
 import {
+  fireBar,
+  floorButton,
+  floorTrap,
   fullHeightDoor,
   goalOnFloor,
   groundRect,
-  movingPlatform,
   platformButton,
   platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 31 — "Lift & Toss"  (Pack: Acrobatics, 2 players)
-// Combines both new mechanics into a single forced-solution puzzle.
-//
-//   • BTN_PAD sits at top-y=260 — below THROW_FEET_PEAK (≈303), so a floor
-//     carrier CANNOT throw a rider onto it. Stacking also falls short
-//     (STACK3=357 > 260). The only way up is to throw from the lift's top.
-//   • The lift oscillates vertically at x=520, docking at y=520 (bottom,
-//     solo-reachable from floor) and y=380 (top). Carrier picks up rider
-//     at the bottom, rides up, throws at the peak — the ~140 px extra
-//     height pushes the horizontal throw reach from ~396 px to ~558 px,
-//     enough to clear the gap to BTN_PAD at center x≈1090.
-//
-// Solo-bypass check: a solo jump from lift-top lands ~x=868 horizontally
-// (348 px reach), short of BTN_PAD's left edge at x=1000. So only the
-// carry-then-throw path hits the button ledge.
+// Level 31 — "Four Pillars"  (Pack: Squad Crew, 4 players)
+// Easiest squad level — but still real teamwork. Four stack-only pillars,
+// each topped by a latching button. All four required to open the goal
+// door. A lava bridge between pillar 2 and pillar 3 only goes cold while
+// one player holds the pressure pad on pillar 1's lower step. So the
+// natural divide-and-conquer plan needs a fifth role: a "holder" who
+// stays back. With four players, that's tight: pair up to stack pillars
+// 1 and 2 (one of those four becomes the holder), then the remaining
+// three handle pillars 3 and 4 in pairs (someone has to commit to being
+// alone temporarily). The latches all stick, so the order can be tuned.
 
-const MAP_W = 1280;
-
-const BTN_PAD = platformRect(1000, 260, 180);
-const LIFT_X  = 520;   // lift center x
+const MAP_W = 2560;
+const P1 = platformRect(192,  400, 192);
+const P2 = platformRect(704,  400, 192);
+const P3 = platformRect(1664, 400, 192);
+const P4 = platformRect(2176, 400, 192);
+const PED = platformRect(384, 540, 96);
 
 export const LEVEL_31: LevelData = {
   id: 31,
-  name: 'Lift & Toss',
-  minPlayers: 2,
+  name: 'Four Pillars',
+  minPlayers: 4,
   mapWidth: MAP_W,
 
-  solidRects: [groundRect(MAP_W), BTN_PAD],
-
+  solidRects: [groundRect(MAP_W), P1, P2, P3, P4, PED],
   spawnPoints: standardSpawns(),
 
   objects: [
-    // Vertical lift — `startX` top-left = LIFT_X - 64, center aligns with LIFT_X.
-    movingPlatform('lift31', LIFT_X - 64, 520, 128, {
-      axis: 'y',
-      from: 520 + 16, // platform center y at bottom dock
-      to:   380 + 16, // platform center y at top dock
-      speed: 90,
-    }),
-
-    // Throw-only latching button — gates the door.
-    platformButton('btn31', BTN_PAD, 'door31', {
-      latching: true, width: 96,
-    }),
-    fullHeightDoor('door31', 1220),
-    goalOnFloor('goal31', 1260),
+    // Four stack-only latches.
+    platformButton('btn31a', P1, 'door31', { latching: true }),
+    platformButton('btn31b', P2, 'door31', { latching: true }),
+    platformButton('btn31c', P3, 'door31', { latching: true }),
+    platformButton('btn31d', P4, 'door31', { latching: true }),
+    // Pressure pad on the side step — clears the lava bridge.
+    platformButton('btn31hold', PED, 'trap31', { width: 96 }),
+    floorTrap('trap31', 1216, 768),
+    fireBar('fb31', 1216, 580, 3, 1.4, 90),
+    // Goal door + goal.
+    fullHeightDoor('door31', 2400),
+    goalOnFloor('goal31', 2496),
   ],
 };

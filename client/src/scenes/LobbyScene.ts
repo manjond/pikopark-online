@@ -52,7 +52,7 @@ export class LobbyScene extends Phaser.Scene {
   private packErrorText!: Phaser.GameObjects.Text;
   private packHeaderText!: Phaser.GameObjects.Text;
   private packScrollBar?: Phaser.GameObjects.Rectangle;
-  private selectedPackId = 'basics';
+  private selectedPackId = 'solo_cadet';
 
   // ── Pack grid layout + scroll state ───────────────────────────────────────
   private readonly PACK_COLS = 3;
@@ -107,7 +107,7 @@ export class LobbyScene extends Phaser.Scene {
     this.chatMessages = [];
     this.typedMessage = '';
     this.selectedCategory = 1;
-    this.selectedPackId = 'basics';
+    this.selectedPackId = 'solo_cadet';
     this.packScrollY = 0;
     this.packContentHeight = 0;
     this.isHost = false;

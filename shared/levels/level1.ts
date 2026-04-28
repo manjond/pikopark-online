@@ -1,50 +1,31 @@
-import { TILE_SIZE } from '../constants';
 import { LevelData } from '../level';
 import {
-  floorButton,
-  fullHeightDoor,
+  fireBar,
+  floorTrap,
+  goalOnFloor,
   groundRect,
-  platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 1 — "First Steps"  (Pack: Basics, 1 player)
-// Three ascending platforms. Press the floor button to open the door, then
-// climb the chain of platforms to reach the goal on the highest one.
-//
-// Physics (1280×720):
-//   Solo feet peak 421 → platforms at y=565/472 are solo-reachable.
-//   Goal platform top 365 < 421, but reachable from the mid platform at 472.
-
-const GOAL_PLAT = platformRect(981, 365, 213);
+// Level 1 — "Spark Run"  (Pack: Solo Cadet, 1 player)
+// Easy intro to lava + firebars. Two short lava strips you can clear with
+// a running jump, plus a slow 2-segment firebar at the end whose lower
+// sweep dips toward the floor — wait for it to be vertical, then run past.
 
 export const LEVEL_1: LevelData = {
   id: 1,
-  name: 'First Steps',
+  name: 'Spark Run',
   minPlayers: 1,
 
-  solidRects: [
-    groundRect(),
-    platformRect(128, 565, 299),
-    platformRect(597, 472, 299),
-    GOAL_PLAT,
-  ],
-
+  solidRects: [groundRect()],
   spawnPoints: standardSpawns(),
 
   objects: [
-    floorButton('btn1', 299, 'door1'),
-    fullHeightDoor('door1', 512),
-    // Goal x=1088 is the original hand-set value (platform center is 1087.5).
-    {
-      id: 'goal1',
-      type: 'goal',
-      x: 1088,
-      y: GOAL_PLAT.y - TILE_SIZE / 2,
-      width: TILE_SIZE,
-      height: TILE_SIZE,
-      requiredPlayers: 0,
-      linkedId: '',
-    },
+    floorTrap('trap1a', 360, 96),
+    floorTrap('trap1b', 640, 128),
+    // 2-segment firebar at y=608 — radius 64, dips to y=672 (just above floor).
+    // Slow rotation (1 rad/s ≈ one full turn every 6 s) gives plenty of timing.
+    fireBar('fb1', 960, 608, 2, 1.0, 0),
+    goalOnFloor('goal1', 1200),
   ],
 };

@@ -1,39 +1,39 @@
 import { LevelData } from '../level';
 import {
-  fullHeightDoor,
-  goalOnFloor,
+  fireBar,
+  floorSpring,
+  floorTrap,
+  goalOnPlatform,
   groundRect,
-  platformButton,
   platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 5 — "Grand Tour"  (Pack: Basics, 1 player)
-// Wide map (1920px). Three latching buttons scattered across three sections.
-// All three must be pressed to open the final door. Find them all!
+// Level 5 — "Hop High"  (Pack: Solo Cadet, 1 player)
+// A spring pad launches you high over a wide lava pit, but a tall fire bar
+// rotates through the airspace. Bounce, dodge, and land on the goal mesa
+// on the far side. The intermediate landing pad gives you a checkpoint to
+// reassess; missing it means a second spring attempt.
 
-const MAP_W = 1920;
-
-const PLAT_A  = platformRect(256,  507, 192);  // left section
-const PLAT_B1 = platformRect(768,  560, 192);  // stepping stone
-const PLAT_B  = platformRect(864,  460, 192);  // middle section
-const PLAT_C  = platformRect(1408, 507, 192);  // right section
+const MID_PLAT  = platformRect(512, 365, 192);
+const GOAL_PLAT = platformRect(1024, 395, 224);
 
 export const LEVEL_5: LevelData = {
   id: 5,
-  name: 'Grand Tour',
+  name: 'Hop High',
   minPlayers: 1,
-  mapWidth: MAP_W,
 
-  solidRects: [groundRect(MAP_W), PLAT_A, PLAT_B1, PLAT_B, PLAT_C],
-
+  solidRects: [groundRect(), MID_PLAT, GOAL_PLAT],
   spawnPoints: standardSpawns(),
 
   objects: [
-    platformButton('btn5a', PLAT_A, 'door5', { latching: true }),
-    platformButton('btn5b', PLAT_B, 'door5', { latching: true }),
-    platformButton('btn5c', PLAT_C, 'door5', { latching: true }),
-    fullHeightDoor('door5', 1728),
-    goalOnFloor('goal5', 1888),
+    floorTrap('trap5a', 560, 400),
+    // Spring at x=160 gives ~600 px of rise — easily clears the 365 mid-plat.
+    floorSpring('spring5', 160),
+    // 3-segment firebar pivoting between the mid plat and the goal mesa.
+    // Radius 96 sweeps between y=269 and y=461, so you must time both your
+    // launch and the leap from the mid-plat to the goal.
+    fireBar('fb5', 768, 365, 3, 1.2, 0),
+    goalOnPlatform('goal5', GOAL_PLAT),
   ],
 };

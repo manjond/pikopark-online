@@ -1,39 +1,35 @@
 import { LevelData } from '../level';
 import {
-  floorButton,
-  fullHeightDoor,
+  crumblePlatform,
+  fireBar,
+  floorTrap,
   goalOnFloor,
   groundRect,
-  platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 7 — "Wide Relay"  (Pack: Duo, 2 players)
-// Scrolling 1920px map. Player A holds pressure btn7a → door7a opens.
-// Player B crosses and steps on btn7b (latching) → door7b opens forever.
-// Player A releases btn7a and runs through. Both reach the goal.
-
-const MAP_W = 1920;
+// Level 7 — "Crumble Cascade"  (Pack: Solo Adept, 1 player)
+// A long lava lake with five crumble platforms zig-zagging across at two
+// heights. A firebar pivots at the centre, sweeping through the lower lane.
+// The natural rhythm wants you on the high lane while the bar passes, then
+// dropping back to the low lane to land on the far floor.
 
 export const LEVEL_7: LevelData = {
   id: 7,
-  name: 'Wide Relay',
-  minPlayers: 2,
-  mapWidth: MAP_W,
+  name: 'Crumble Cascade',
+  minPlayers: 1,
 
-  solidRects: [
-    groundRect(MAP_W),
-    platformRect(512, 560, 213),
-    platformRect(1152, 520, 213),
-  ],
-
+  solidRects: [groundRect()],
   spawnPoints: standardSpawns(),
 
   objects: [
-    floorButton('btn7a', 256, 'door7a'),
-    fullHeightDoor('door7a', 640),
-    floorButton('btn7b', 1024, 'door7b', { latching: true }),
-    fullHeightDoor('door7b', 1280),
-    goalOnFloor('goal7', 1760),
+    floorTrap('trap7', 672, 800),
+    crumblePlatform('cr7a', 384, 565, 96),
+    crumblePlatform('cr7b', 528, 460, 96),
+    crumblePlatform('cr7c', 672, 365, 96),
+    crumblePlatform('cr7d', 816, 460, 96),
+    crumblePlatform('cr7e', 960, 565, 96),
+    fireBar('fb7', 672, 540, 3, 1.6, 0),
+    goalOnFloor('goal7', 1180),
   ],
 };

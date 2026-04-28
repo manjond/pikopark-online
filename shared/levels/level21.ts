@@ -5,37 +5,45 @@ import {
   fullHeightDoor,
   goalOnFloor,
   groundRect,
+  platformButton,
   platformRect,
   standardSpawns,
 } from './_helpers';
 
-// Level 21 — "Spike Rush"  (Pack: Extreme, 2 players)
-// Three spike strips with narrow safe platforms above each one.
-// A 2-player wide button opens the final door. Tight platforming required.
+// Level 21 — "Trapdoor"  (Pack: Duo Synergy, 2 players)
+// Three-stage trust puzzle. Door A is held open ONLY while A presses the
+// pad — so B has a brief window to dash through. On the far side B finds
+// a stack-only platform — but B is alone there. B has to wait for A to
+// commit: A leaves the pad (door A slams shut behind A as A passes) and
+// joins B for a stack. The stacking latches a permanent button that
+// opens the goal door — the timing of A's leave is the whole puzzle.
 //
-// Physics: All platforms ≥ SOLO_FEET_PEAK (solo-reachable from floor).
+// Solvability: door19a is held open by btn19hold (pressure, sum=1 < min=2,
+// validator OK). door21goal opens via the latching stack button.
+
+const MAP_W = 1664;
+const STACK_PT = platformRect(960, 400, 192);
 
 export const LEVEL_21: LevelData = {
   id: 21,
-  name: 'Spike Rush',
+  name: 'Trapdoor',
   minPlayers: 2,
+  mapWidth: MAP_W,
 
-  solidRects: [
-    groundRect(),
-    // Narrow platforms above each spike strip
-    platformRect(288, 533, 128),
-    platformRect(576, 507, 128),
-    platformRect(864, 480, 128),
-  ],
-
+  solidRects: [groundRect(MAP_W), STACK_PT],
   spawnPoints: standardSpawns(),
 
   objects: [
-    floorTrap('trap21a', 352, 96),
-    floorTrap('trap21b', 640, 96),
-    floorTrap('trap21c', 928, 96),
-    floorButton('btn21', 1088, 'door21', { latching: true, requiredPlayers: 2, width: 160 }),
-    fullHeightDoor('door21', 1152),
-    goalOnFloor('goal21', 1220),
+    // A's pressure pad (must hold to open door A so B can pass).
+    floorButton('btn21hold', 96, 'door21a'),
+    fullHeightDoor('door21a', 384),
+    // Lava strip just past door A — B must clear it by jumping while
+    // door A is open. The strip width = 96 px, easily jumpable mid-run.
+    floorTrap('trap21a', 480, 96),
+    // The stack-only platform with the goal-opener latching button.
+    platformButton('btn21stack', STACK_PT, 'door21goal', { latching: true }),
+    // Goal door is past the stack platform — opens permanently after stack.
+    fullHeightDoor('door21goal', 1280),
+    goalOnFloor('goal21', 1600),
   ],
 };
