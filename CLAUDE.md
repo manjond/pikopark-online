@@ -266,7 +266,6 @@ on the client side — they will silently return nothing and the bug will reappe
 - Server `ObjectState.tickMotion(dtMs)` advances a triangle-wave between `from` and `to` at `speed` px/s, then exposes `platformVX` / `platformVY` for rider carry.
 - Integration loop treats platforms as one-way solids (land on top only), drags grounded riders horizontally each sub-step, and pushes riders upward with a rising Y-axis platform.
 - Client reads `platformPositions` each tick and updates the rendered rect. The schema intentionally doesn't sync platform x/y — motion fields are server-only.
-
 ## Improvement Ideas (game design)
 
 These are ideas for making the game more engaging — not yet scheduled, just documented for reference.
@@ -302,7 +301,66 @@ These are ideas for making the game more engaging — not yet scheduled, just do
 
 `shared/levels/_helpers.ts` centralises the constants and factory functions that every `levelN.ts` currently hand-rolls, and ships a static validator that the server runs at startup (`validateAllPacks` in `server/src/index.ts`). If any level has a structural error (missing goal, broken linkedId, unsolvable pressure AND-group), the server aborts boot.
 
-### Level-authoring conventions (enforce when migrating)
+### Level-design rules (MANDATORY — read before authoring or editing any level)
+
+#### 1. Solvability with the minimum player count
+
+A level's `minPlayers` is the MINIMUM number of active players required, and the level MUST be completable by exactly that many — no fewer, no more. Validation tools catch some failures (orphan doors, pressure-only AND-deadlocks) but the rest is on the author:
+
+- **Solo levels (`minPlayers: 1`)** must NOT use any 2-player mechanic:
+  - No platforms in the stack-only band (top-y in `[STACK3_FEET_PEAK, SOLO_FEET_PEAK)` = `[357, 421)`) unless reachable by other means (spring, lift, throw).
+  - No throw-only perches (top-y in `[THROW_FEET_PEAK, STACK3_FEET_PEAK)` = `[303, 357)`).
+  - No buttons with `requiredPlayers > 1`.
+  - No carry/throw — solo can't pick up a partner.
+
+- **Duo levels (`minPlayers: 2`)** must complete with EXACTLY 2 players:
+  - At any one moment, ≤ 1 player is "stuck" on a pressure pad. The other must be free to advance.
+  - Buttons with `requiredPlayers ≥ 2` must be latching, otherwise both players are stuck simultaneously.
+  - Stack-only and throw-only mechanics are valid (need 2 to operate).
+
+- **Squad levels (`minPlayers: 4`)** must complete with EXACTLY 4 players:
+  - Pressure-holds simultaneously ≤ 3 (at least 1 free).
+  - 3-stack mechanics OK; never require a 4-stack (`STACK4_FEET_PEAK` doesn't exist as a band — physics-wise, would need a 5th player).
+  - No mechanic requiring 5+ simultaneous holders.
+
+#### 2. Spatial reachability
+
+Every key element (button, latch, lift dock, goal) must be reachable from spawn given the level's player count.
+
+- **Horizontal jump distance**: max **400 px** (running jump from flat ground, full air time × MOVE_SPEED). Bridge any gap > 350 px with intermediate platforms — leave 50 px of margin for grounded acceleration variance.
+- **Vertical reach bands** (use `_helpers.ts` constants — never paste numbers):
+  - From floor (1 player): top-y ≥ `SOLO_FEET_PEAK` (421)
+  - From 2-stack: top-y ≥ `STACK2_FEET_PEAK` (389)
+  - From 3-stack: top-y ≥ `STACK3_FEET_PEAK` (357)
+  - From spring: top-y ≥ `SPRING_FEET_PEAK` (72)
+  - From throw (carrier on floor): top-y ≥ `THROW_FEET_PEAK` (303)
+- **Spring horizontal range**: ~600 px each side from launch point. Don't place spring-only goals farther than 600 px horizontally from any spring.
+- **Throw horizontal range**: `THROW_HORIZONTAL_MAX` ≈ 598 px.
+- **Vertical-lift apex rule**: a player at the lift's apex column has only the standard 400 px running jump. Any goal pad or key element must be within 400 px horizontally of the lift's apex column, OR there must be a chain of intermediate platforms (each gap ≤ 350 px).
+- **Lava-pit width**: max ~350 px to be solo-jumpable. Wider pits need crumble/static bridges, springs, or throws to cross.
+
+#### 3. Safe spawn rim
+
+The default spawn is `standardSpawns()` at x = 48, 112, 176, 240 on the floor. To prevent insta-death:
+
+- **Trap left edge ≥ 256** (rightmost spawn center 240 + half player width 16). A trap starting at x ≤ 255 catches the rightmost spawn on tick 1.
+- **Firebar pivot ≥ 256** (or far enough that the swing arc never reaches a stationary spawning player).
+- **Door at x > 280** so the spawn rim has room before any blockage.
+
+#### 4. AND-logic gotchas
+
+- A door/trap with multiple buttons linked uses **AND-logic** — every linked button must be active.
+- Latching button = active forever after first press; pressure button = active only while held.
+- DON'T mix latching + pressure linked to the same target — the latch is functionally useless because the pressure pad still gates the AND.
+- DON'T design a level where `minPlayers - sum(simultaneous pressure holders) < 1` — the validator catches this for door-pressure groups, but extends to your overall puzzle flow too.
+
+#### 5. Moving-platform notes
+
+- The lift's vertical motion is now stepped per substep (3× per tick) — riders stay glued to a descending or ascending platform without the gravity-lag hover that used to flicker `isGrounded` off.
+- Lift speeds in the 80–150 px/s range feel grippy; faster than ~250 px/s starts to slip riders off corners.
+- A vertical lift's rider can't jump while the platform's `platformVY` snap is below them (rider's bottom briefly inside platform top after carry); this is intentional friction — keep apex docks generous.
+
+### Level-authoring conventions
 
 - **Spawn points**: always call `standardSpawns()` with no arguments. The default (4 players at `48, 112, 176, 240`, y on the floor) fits every map ≥ 256 px wide and keeps rosters consistent across packs.
 - **Door `linkedId`**: always leave empty (`fullHeightDoor('doorX', x)` — omit the third argument). Button-to-door propagation is driven solely by `button.linkedId → door`; the door's own `linkedId` is decorative and pollutes diffs when it drifts. The same applies to `trap.linkedId` — buttons drive traps via `button.linkedId → trap`; the reverse pointer is decorative.

@@ -406,11 +406,6 @@ export class GameRoom extends Room<GameState> {
       if (obj.type === 'button' && !obj.latching) obj.activated = false;
     });
 
-    // ── Advance moving platforms ──────────────────────────────────────────────
-    this.state.interactiveObjects.forEach((obj) => {
-      if (obj.type === 'platform') obj.tickMotion(deltaTime);
-    });
-
     // ── Advance fire bars (rotation only; collision happens post-integration) ──
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type !== 'firebar') return;
@@ -455,8 +450,17 @@ export class GameRoom extends Room<GameState> {
 
     // ── Physics with sub-steps to prevent tunnelling ───────────────────────────
     const subDt = dt / SUBSTEPS;
+    const subDtMs = deltaTime / SUBSTEPS;
 
     for (let sub = 0; sub < SUBSTEPS; sub++) {
+      // Advance moving platforms within the sub-step so riders stay glued —
+      // see "Moving platforms" note in CLAUDE.md. Stepping per substep avoids
+      // the gravity-lag hover bug where a descending platform out-paces the
+      // player and isGrounded flickers off.
+      this.state.interactiveObjects.forEach((obj) => {
+        if (obj.type === 'platform') obj.tickMotion(subDtMs);
+      });
+
       // Save Y before this sub-step for one-way checks
       const prevY = new Map<string, number>();
       this.state.players.forEach((p, id) => prevY.set(id, p.y));
@@ -557,14 +561,17 @@ export class GameRoom extends Room<GameState> {
             currBottom >= pTop &&
             prevBottom <= pTop + TILE_SIZE * 0.6
           ) {
+            // Snap rider to platform top, then drag along with the platform's
+            // motion this sub-step. Applies to BOTH up and down — without the
+            // downward carry the rider hovers above a descending platform
+            // until gravity catches up (~100 ms), and isGrounded flickers
+            // false so they can't jump.
             player.y = pTop - TILE_SIZE / 2;
             player.velocityY = 0;
             player.isGrounded = true;
             player.onIce = false;
-            // Carry horizontal motion with the platform during this sub-step
             player.x += plat.platformVX * subDt;
-            // Vertical lift: if platform moves up, push player up with it
-            if (plat.platformVY < 0) player.y += plat.platformVY * subDt;
+            player.y += plat.platformVY * subDt;
           }
         });
 

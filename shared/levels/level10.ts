@@ -10,35 +10,36 @@ import {
 } from './_helpers';
 
 // Level 10 — "Vertical Trial"  (Pack: Solo Adept, 1 player)
-// A wide lava lake leaves no floor to walk on. A vertical lift carries you
-// upward through the airspace of two firebars. Step off onto the goal mesa
-// at the lift's apex. The lift returns to the dock automatically — patient
-// timing beats fast reflexes here.
+// A wide lava lake leaves no walkable floor between spawn and the goal
+// column. A vertical lift carries you up to a chain of three stepping
+// ledges, each placed within a single jump of the next. Two firebars
+// mid-air force you to time each crossing.
 
-const DOCK     = platformRect(64, 580, 96);   // safe boarding pad over the lava
-const GOAL_PAD = platformRect(1056, 300, 192);
+const MAP_W = 1280;
+const STEP_A   = platformRect(320,  320, 192); // first catwalk, beside lift apex
+const STEP_B   = platformRect(640,  320, 192); // second catwalk
+const GOAL_PAD = platformRect(992,  300, 192); // goal mesa, slightly higher
 
 export const LEVEL_10: LevelData = {
   id: 10,
   name: 'Vertical Trial',
   minPlayers: 1,
+  mapWidth: MAP_W,
 
-  solidRects: [groundRect(), DOCK, GOAL_PAD],
+  solidRects: [groundRect(MAP_W), STEP_A, STEP_B, GOAL_PAD],
   spawnPoints: standardSpawns(),
 
   objects: [
-    // Lava covers everything except the spawn rim and the dock.
     floorTrap('trap10', 720, 896),
-    // Lift rises from the dock height (yTop≈580) to just above the goal pad
-    // top (320). Slow speed = a deliberate ride.
-    movingPlatform('mp10', 192, 580, 128, {
+    // Vertical lift — center x=192, rides between top-y=580 and top-y=300.
+    movingPlatform('mp10', 128, 580, 128, {
       axis: 'y',
       from: 580 + 16,
-      to:   320 + 16,
-      speed: 90,
+      to:   300 + 16,
+      speed: 100,
     }),
-    fireBar('fb10a', 480, 460, 3, 1.4, 0),
-    fireBar('fb10b', 800, 360, 3, -1.6, 90),
+    fireBar('fb10a', 544, 380, 3,  1.4, 0),
+    fireBar('fb10b', 864, 380, 3, -1.6, 90),
     goalOnPlatform('goal10', GOAL_PAD),
   ],
 };

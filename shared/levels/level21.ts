@@ -1,28 +1,25 @@
 import { LevelData } from '../level';
 import {
+  crumblePlatform,
+  fireBar,
   floorButton,
   floorTrap,
   fullHeightDoor,
   goalOnFloor,
   groundRect,
-  platformButton,
-  platformRect,
   standardSpawns,
 } from './_helpers';
 
 // Level 21 — "Trapdoor"  (Pack: Duo Synergy, 2 players)
-// Three-stage trust puzzle. Door A is held open ONLY while A presses the
-// pad — so B has a brief window to dash through. On the far side B finds
-// a stack-only platform — but B is alone there. B has to wait for A to
-// commit: A leaves the pad (door A slams shut behind A as A passes) and
-// joins B for a stack. The stacking latches a permanent button that
-// opens the goal door — the timing of A's leave is the whole puzzle.
-//
-// Solvability: door19a is held open by btn19hold (pressure, sum=1 < min=2,
-// validator OK). door21goal opens via the latching stack button.
+// Two-stage trust puzzle, no solo shortcuts. Stage 1: A holds the pad on
+// the spawn rim; that opens the door so B can pass. While the door is
+// held open, B sprints under a swinging firebar, hops a crumble plate
+// over a small lava strip, and slaps the latching button — that latch
+// opens the goal door for good. With the latch up, A can finally leave
+// the pad (door A slams behind A but A doesn't need it; the goal door is
+// the only one between B and the finish).
 
 const MAP_W = 1664;
-const STACK_PT = platformRect(960, 400, 192);
 
 export const LEVEL_21: LevelData = {
   id: 21,
@@ -30,20 +27,21 @@ export const LEVEL_21: LevelData = {
   minPlayers: 2,
   mapWidth: MAP_W,
 
-  solidRects: [groundRect(MAP_W), STACK_PT],
+  solidRects: [groundRect(MAP_W)],
   spawnPoints: standardSpawns(),
 
   objects: [
-    // A's pressure pad (must hold to open door A so B can pass).
+    // Stage 1 — A's pressure pad and the gate it opens.
     floorButton('btn21hold', 96, 'door21a'),
     fullHeightDoor('door21a', 384),
-    // Lava strip just past door A — B must clear it by jumping while
-    // door A is open. The strip width = 96 px, easily jumpable mid-run.
-    floorTrap('trap21a', 480, 96),
-    // The stack-only platform with the goal-opener latching button.
-    platformButton('btn21stack', STACK_PT, 'door21goal', { latching: true }),
-    // Goal door is past the stack platform — opens permanently after stack.
+    // The crossing — short lava strip, a crumble plate over it, and a
+    // firebar swinging in the airspace.
+    floorTrap('trap21', 576, 192),
+    crumblePlatform('cr21', 528, 565, 96),
+    fireBar('fb21', 576, 460, 3, 1.5, 0),
+    // Stage 2 — latching button past the crossing flips the goal door.
+    floorButton('btn21latch', 928, 'door21goal', { latching: true }),
     fullHeightDoor('door21goal', 1280),
-    goalOnFloor('goal21', 1600),
+    goalOnFloor('goal21', 1568),
   ],
 };
