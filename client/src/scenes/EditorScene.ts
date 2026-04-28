@@ -149,6 +149,11 @@ export class EditorScene extends Phaser.Scene {
   private redoStack: string[] = [];
   private readonly UNDO_LIMIT = 50;
 
+  // Setup overlay — shown before editing a fresh doc so the user picks
+  // name / minPlayers / mapWidth before staring at an empty canvas.
+  private setupGroup: Phaser.GameObjects.GameObject[] = [];
+  private setupActive = false;
+
   constructor() {
     super({ key: 'EditorScene' });
   }
@@ -201,6 +206,10 @@ export class EditorScene extends Phaser.Scene {
     this.selectTool('select');
     this.setStatus('Tip: drag with SELECT to move; corners to resize. Space+drag pans.');
     this.repaint();
+
+    // Fresh editor session → walk the user through the level setup before
+    // surfacing the canvas. Loading an existing level via LOAD skips this.
+    this.showSetupOverlay();
   }
 
   // ═══ Top bar ═══════════════════════════════════════════════════════════════
@@ -992,74 +1001,208 @@ export class EditorScene extends Phaser.Scene {
 
     // Content
     this.contentGfx.clear();
-    for (const r of this.doc.solidRects) {
-      const color =
-        r.tileType === 'ground' ? 0x8b5a2b :
-        r.tileType === 'ice'    ? 0x9fd9ff : 0x00aa66;
-      this.contentGfx.fillStyle(color, 1);
-      this.contentGfx.fillRect(r.x, r.y, r.width, r.height);
-      this.contentGfx.lineStyle(1, 0xffffff, 0.15);
-      this.contentGfx.strokeRect(r.x, r.y, r.width, r.height);
-    }
-    for (const sp of this.doc.spawnPoints) {
-      this.contentGfx.fillStyle(0xffcc66, 0.9);
-      this.contentGfx.fillCircle(sp.x, sp.y, TILE_SIZE / 2);
-      this.contentGfx.lineStyle(2, 0xffffff, 1);
-      this.contentGfx.strokeCircle(sp.x, sp.y, TILE_SIZE / 2);
-    }
-    for (const o of this.doc.objects) {
-      this.drawObject(o);
-    }
+    for (const r of this.doc.solidRects) this.drawSolidRect(r);
+    for (let i = 0; i < this.doc.spawnPoints.length; i++) this.drawSpawn(this.doc.spawnPoints[i]!, i);
+    for (const o of this.doc.objects) this.drawObject(o);
 
     this.drawHover();
     this.drawSelection();
     this.updateInfo();
   }
 
+  // ═══ Polished rendering helpers ════════════════════════════════════════════
+
+  /**
+   * Three-tone gradient block. Solid colour fills then a brighter top-edge
+   * highlight + darker bottom shadow give the tile a pseudo-3D feel without
+   * actual shaders.
+   */
+  private drawSolidRect(r: SolidRect): void {
+    const g = this.contentGfx;
+    if (r.tileType === 'ground') {
+      // Body: warm brown.
+      g.fillStyle(0x8b5a2b, 1).fillRect(r.x, r.y, r.width, r.height);
+      // Lighter band along the top.
+      g.fillStyle(0xb37a3a, 1).fillRect(r.x, r.y, r.width, 4);
+      // Grass crest above the top edge.
+      g.fillStyle(0x4ca84c, 1).fillRect(r.x, r.y - 2, r.width, 3);
+      g.fillStyle(0x6acc6a, 1).fillRect(r.x, r.y - 2, r.width, 1);
+      // Bottom shadow.
+      g.fillStyle(0x6a3a1a, 1).fillRect(r.x, r.y + r.height - 4, r.width, 4);
+    } else if (r.tileType === 'ice') {
+      // Body: pale-cyan.
+      g.fillStyle(0x9fd9ff, 1).fillRect(r.x, r.y, r.width, r.height);
+      // Top highlight stripe.
+      g.fillStyle(0xddf2ff, 1).fillRect(r.x, r.y, r.width, 4);
+      g.fillStyle(0xffffff, 1).fillRect(r.x, r.y, r.width, 1);
+      // Diagonal sparkle hints (just every-32 px short marks).
+      g.fillStyle(0xffffff, 0.5);
+      for (let x = r.x + 12; x < r.x + r.width - 4; x += 32) {
+        g.fillRect(x, r.y + 8, 6, 1);
+      }
+      // Bottom shadow.
+      g.fillStyle(0x6f9fc8, 1).fillRect(r.x, r.y + r.height - 3, r.width, 3);
+    } else {
+      // platform — wood-plank look.
+      g.fillStyle(0x00aa66, 1).fillRect(r.x, r.y, r.width, r.height);
+      g.fillStyle(0x33cc88, 1).fillRect(r.x, r.y, r.width, 4);
+      g.fillStyle(0x66ee99, 1).fillRect(r.x, r.y, r.width, 1);
+      // Plank divisions.
+      g.fillStyle(0x008855, 0.7);
+      for (let x = r.x + 32; x < r.x + r.width; x += 32) {
+        g.fillRect(x, r.y + 4, 1, r.height - 8);
+      }
+      g.fillStyle(0x006a44, 1).fillRect(r.x, r.y + r.height - 3, r.width, 3);
+    }
+  }
+
+  /**
+   * Spawn point — coloured player-circle with the slot index drawn on top.
+   * Mirrors the in-game player palette so the editor preview matches the
+   * GameScene render.
+   */
+  private drawSpawn(sp: SpawnPoint, idx: number): void {
+    const g = this.contentGfx;
+    const PALETTE = [0xff3333, 0x3366ff, 0x33cc44, 0xffdd00, 0xaa33cc, 0xff8800, 0xff69b4, 0x00ccdd];
+    const color = PALETTE[idx % PALETTE.length]!;
+    const r = TILE_SIZE / 2;
+
+    // Soft glow.
+    g.fillStyle(color, 0.18).fillCircle(sp.x, sp.y, r + 6);
+    // Body.
+    g.fillStyle(color, 1).fillCircle(sp.x, sp.y, r);
+    // Top highlight (faux sphere).
+    g.fillStyle(0xffffff, 0.35).fillCircle(sp.x - 4, sp.y - 5, r * 0.45);
+    // Crisp outline.
+    g.lineStyle(2, 0xffffff, 1).strokeCircle(sp.x, sp.y, r);
+    // Inner pupil to suggest a face.
+    g.fillStyle(0x111625, 1).fillCircle(sp.x, sp.y + 2, 3);
+  }
+
   private drawObject(o: LevelObjectDef): void {
     const tl = { x: o.x - o.width / 2, y: o.y - o.height / 2 };
+    const g = this.contentGfx;
+
     if (o.type === 'goal') {
-      this.contentGfx.fillStyle(0xffff00, 1);
-      this.contentGfx.fillRect(tl.x, tl.y, o.width, o.height);
-      this.contentGfx.lineStyle(2, 0xffffff, 1);
-      this.contentGfx.strokeRect(tl.x, tl.y, o.width, o.height);
-    } else if (o.type === 'crumble') {
-      this.contentGfx.fillStyle(0xa88060, 1);
-      this.contentGfx.fillRect(tl.x, tl.y, o.width, o.height);
-      this.contentGfx.lineStyle(1, 0x5a3a20, 1);
-      this.contentGfx.strokeRect(tl.x, tl.y, o.width, o.height);
-    } else if (o.type === 'platform' && o.motion) {
-      this.contentGfx.fillStyle(0xc88c32, 1);
-      this.contentGfx.fillRect(tl.x, tl.y, o.width, o.height);
-      this.contentGfx.lineStyle(1, 0x6a4010, 1);
-      this.contentGfx.strokeRect(tl.x, tl.y, o.width, o.height);
-      // Motion range indicator
-      this.contentGfx.lineStyle(2, 0xffaa66, 0.55);
-      if (o.motion.axis === 'y') {
-        this.contentGfx.lineBetween(o.x, o.motion.from, o.x, o.motion.to);
-      } else {
-        this.contentGfx.lineBetween(o.motion.from, o.y, o.motion.to, o.y);
+      // Pulsing star: large soft halo + diamond rotated 0/45.
+      g.fillStyle(0xffeb66, 0.25).fillCircle(o.x, o.y, o.width * 0.9);
+      g.fillStyle(0xffd633, 0.5).fillCircle(o.x, o.y, o.width * 0.6);
+      const rO = o.width / 2;
+      // Outer 8-point star — two overlapping squares.
+      g.fillStyle(0xffeb33, 1);
+      g.fillTriangle(o.x, o.y - rO, o.x - rO, o.y, o.x, o.y + rO);
+      g.fillTriangle(o.x, o.y - rO, o.x + rO, o.y, o.x, o.y + rO);
+      const r2 = rO * 0.7;
+      g.fillStyle(0xfff066, 1);
+      g.fillTriangle(o.x - r2, o.y - r2, o.x + r2, o.y - r2, o.x, o.y + r2);
+      g.fillTriangle(o.x - r2, o.y + r2, o.x + r2, o.y + r2, o.x, o.y - r2);
+      // Centre highlight.
+      g.fillStyle(0xffffff, 0.8).fillCircle(o.x - 2, o.y - 2, 4);
+    }
+    else if (o.type === 'crumble') {
+      // Brittle stone — brown with crack lines.
+      g.fillStyle(0x8a5a3a, 1).fillRect(tl.x, tl.y, o.width, o.height);
+      g.fillStyle(0xa97550, 1).fillRect(tl.x, tl.y, o.width, 4);
+      g.fillStyle(0x5a3a20, 1).fillRect(tl.x, tl.y + o.height - 4, o.width, 4);
+      // Crack pattern.
+      g.lineStyle(1, 0x3a2010, 0.7);
+      for (let x = tl.x + 12; x < tl.x + o.width - 4; x += 24) {
+        g.lineBetween(x, tl.y + 6, x + 6, tl.y + 14);
+        g.lineBetween(x + 6, tl.y + 14, x + 4, tl.y + 22);
       }
-    } else if (o.type === 'firebar') {
+      // Subtle "shake" indicator dots.
+      g.fillStyle(0xff4444, 0.5).fillCircle(tl.x + 6, tl.y + 6, 2);
+      g.fillStyle(0xff4444, 0.5).fillCircle(tl.x + o.width - 6, tl.y + 6, 2);
+    }
+    else if (o.type === 'platform' && o.motion) {
+      // Moving platform — bronze with motion-range track + arrow chevrons.
+      g.fillStyle(0xc88c32, 1).fillRect(tl.x, tl.y, o.width, o.height);
+      g.fillStyle(0xeab560, 1).fillRect(tl.x, tl.y, o.width, 4);
+      g.fillStyle(0x6a4010, 1).fillRect(tl.x, tl.y + o.height - 4, o.width, 4);
+      // Travel-range track (dashed-look via segmented strokes).
+      g.lineStyle(3, 0xffaa66, 0.4);
+      if (o.motion.axis === 'y') {
+        g.lineBetween(o.x, o.motion.from, o.x, o.motion.to);
+        // End-cap circles at extremes.
+        g.fillStyle(0xffaa66, 0.6).fillCircle(o.x, o.motion.from, 4);
+        g.fillStyle(0xffaa66, 0.6).fillCircle(o.x, o.motion.to,   4);
+        // Up-down chevron on the platform itself.
+        g.fillStyle(0xffeecc, 1);
+        g.fillTriangle(o.x - 6, tl.y + 14, o.x + 6, tl.y + 14, o.x, tl.y + 8);
+        g.fillTriangle(o.x - 6, tl.y + o.height - 14, o.x + 6, tl.y + o.height - 14, o.x, tl.y + o.height - 8);
+      } else {
+        g.lineBetween(o.motion.from, o.y, o.motion.to, o.y);
+        g.fillStyle(0xffaa66, 0.6).fillCircle(o.motion.from, o.y, 4);
+        g.fillStyle(0xffaa66, 0.6).fillCircle(o.motion.to,   o.y, 4);
+        // Left-right chevrons.
+        g.fillStyle(0xffeecc, 1);
+        g.fillTriangle(tl.x + 8, o.y, tl.x + 14, o.y - 5, tl.x + 14, o.y + 5);
+        g.fillTriangle(tl.x + o.width - 8, o.y, tl.x + o.width - 14, o.y - 5, tl.x + o.width - 14, o.y + 5);
+      }
+    }
+    else if (o.type === 'firebar') {
       const segs = o.segments ?? 3;
       const length = segs * TILE_SIZE;
-      this.contentGfx.fillStyle(0x332222, 1);
-      this.contentGfx.fillCircle(o.x, o.y, 6);
-      this.contentGfx.fillStyle(0xff4400, 0.9);
+      // Faint sweep ring shows the danger zone.
+      g.lineStyle(2, 0xff6622, 0.18).strokeCircle(o.x, o.y, length);
+      g.fillStyle(0xff6622, 0.06).fillCircle(o.x, o.y, length);
+      // Pivot — dark stone with golden ring.
+      g.fillStyle(0x222222, 1).fillCircle(o.x, o.y, 9);
+      g.lineStyle(2, 0xffaa33, 1).strokeCircle(o.x, o.y, 9);
+      // Bar segments laid out along +x as the canonical "0°" orientation.
       for (let i = 0; i < segs; i++) {
-        this.contentGfx.fillCircle(o.x + (i + 0.5) * TILE_SIZE, o.y, TILE_SIZE * 0.35);
+        const cx = o.x + (i + 0.5) * TILE_SIZE;
+        g.fillStyle(0xff7733, 1).fillCircle(cx, o.y, TILE_SIZE * 0.36);
+        g.fillStyle(0xffcc55, 1).fillCircle(cx, o.y, TILE_SIZE * 0.22);
+        g.fillStyle(0xffffff, 0.7).fillCircle(cx - 2, o.y - 2, 3);
       }
-      this.contentGfx.lineStyle(1, 0xff6622, 0.25);
-      this.contentGfx.strokeCircle(o.x, o.y, length);
-    } else if (o.type === 'button' || o.type === 'door' || o.type === 'trap' || o.type === 'spring') {
-      const color =
-        o.type === 'button' ? 0xffff00 :
-        o.type === 'door'   ? 0xcc3333 :
-        o.type === 'trap'   ? 0xff5500 : 0x22cc88;
-      this.contentGfx.fillStyle(color, 1);
-      this.contentGfx.fillRect(tl.x, tl.y, o.width, o.height);
-      this.contentGfx.lineStyle(1, 0xffffff, 0.3);
-      this.contentGfx.strokeRect(tl.x, tl.y, o.width, o.height);
+    }
+    else if (o.type === 'spring') {
+      // Spring pad — green coil with golden top.
+      g.fillStyle(0x223311, 1).fillRect(tl.x, tl.y, o.width, o.height);
+      g.fillStyle(0x22cc88, 1).fillRect(tl.x + 2, tl.y + 2, o.width - 4, o.height - 4);
+      // Coil bands.
+      g.fillStyle(0x115a44, 1);
+      for (let i = 0; i < 3; i++) {
+        g.fillRect(tl.x + 4, tl.y + 4 + i * 4, o.width - 8, 1);
+      }
+      // Golden top plate.
+      g.fillStyle(0xffd633, 1).fillRect(tl.x, tl.y - 2, o.width, 4);
+      g.fillStyle(0xffeb88, 1).fillRect(tl.x, tl.y - 2, o.width, 1);
+    }
+    else if (o.type === 'trap') {
+      // Lava — orange body with wavy hot top edge.
+      g.fillStyle(0xcc2200, 1).fillRect(tl.x, tl.y + 2, o.width, o.height - 2);
+      g.fillStyle(0xff5511, 1).fillRect(tl.x, tl.y, o.width, 6);
+      g.fillStyle(0xffaa00, 1).fillRect(tl.x, tl.y, o.width, 2);
+      // Bubbles dotted along the surface.
+      g.fillStyle(0xffeb44, 0.7);
+      for (let x = tl.x + 6; x < tl.x + o.width - 4; x += 12) {
+        g.fillCircle(x, tl.y + 3, 1.5);
+      }
+    }
+    else if (o.type === 'button') {
+      // Pressure pad — yellow dome with metal base.
+      g.fillStyle(0x5a4a10, 1).fillRect(tl.x, tl.y + o.height - 6, o.width, 6);
+      g.fillStyle(0xffd633, 1).fillRect(tl.x + 2, tl.y, o.width - 4, o.height - 4);
+      g.fillStyle(0xfff099, 1).fillRect(tl.x + 2, tl.y, o.width - 4, 2);
+      // Latching badge — red dot at corner if latching.
+      if (o.latching) {
+        g.fillStyle(0xff4466, 1).fillCircle(tl.x + 6, tl.y + 6, 3);
+        g.fillStyle(0xffffff, 1).fillCircle(tl.x + 6, tl.y + 6, 1);
+      }
+    }
+    else if (o.type === 'door') {
+      // Door — red panel with metallic frame.
+      g.fillStyle(0x66161e, 1).fillRect(tl.x - 2, tl.y, o.width + 4, o.height);
+      g.fillStyle(0xcc3333, 1).fillRect(tl.x, tl.y, o.width, o.height);
+      g.fillStyle(0xff6677, 1).fillRect(tl.x, tl.y, 2, o.height);
+      g.fillStyle(0x880022, 1).fillRect(tl.x + o.width - 2, tl.y, 2, o.height);
+      // Cross-bar pattern along the door.
+      g.fillStyle(0x661122, 0.6);
+      for (let y = tl.y + 24; y < tl.y + o.height - 8; y += 48) {
+        g.fillRect(tl.x, y, o.width, 2);
+      }
     }
   }
 
@@ -1268,6 +1411,9 @@ export class EditorScene extends Phaser.Scene {
 
   private loadDoc(data: LevelData): void {
     this.pushUndo();
+    // Drop the setup overlay if it's still up — loading a saved level
+    // skips the metadata picker since the file already carries all of it.
+    if (this.setupActive) this.dismissSetupOverlay();
     this.doc = {
       id: data.id,
       name: data.name,
@@ -1295,7 +1441,199 @@ export class EditorScene extends Phaser.Scene {
     this.selection = null;
     this.rebuildInspector();
     this.repaint();
-    this.setStatus('New level. Drag with a paint tool to create terrain.');
+    this.showSetupOverlay();
+  }
+
+  // ═══ Setup overlay (level metadata picker) ═════════════════════════════════
+
+  /**
+   * Pre-edit configuration screen. Shown once on entering a fresh doc and
+   * again on NEW. Lets the user pick name / min-players / map-width via
+   * preset buttons, then dismisses to reveal the editor canvas.
+   *
+   * Width presets cover the bundled-pack range (1280–3200) so the user
+   * doesn't have to type a number unless they want something exotic.
+   */
+  private showSetupOverlay(): void {
+    if (this.setupActive) return;
+    this.setupActive = true;
+
+    const W = GAME_WIDTH;
+    const H = GAME_HEIGHT;
+    const depth = 500;
+
+    // Dim backdrop — blocks input to the editor while setup is up.
+    const overlay = this.add.rectangle(0, 0, W, H, 0x000814, 0.88)
+      .setOrigin(0).setScrollFactor(0).setDepth(depth)
+      .setInteractive();
+
+    // Centred panel.
+    const panelW = 640;
+    const panelH = 460;
+    const panelX = (W - panelW) / 2;
+    const panelY = (H - panelH) / 2;
+    const panel = this.add.rectangle(panelX, panelY, panelW, panelH, 0x1a2242, 1)
+      .setOrigin(0).setScrollFactor(0).setDepth(depth + 1)
+      .setStrokeStyle(2, 0x88ccff);
+
+    // Top accent bar.
+    const accent = this.add.rectangle(panelX, panelY, panelW, 4, 0x88ccff, 1)
+      .setOrigin(0).setScrollFactor(0).setDepth(depth + 2);
+
+    const title = this.add.text(W / 2, panelY + 30, 'NEW LEVEL', {
+      ...FONT, fontSize: '20px', color: '#ffffff',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 2);
+
+    const subtitle = this.add.text(W / 2, panelY + 56, 'configure before you start painting', {
+      ...FONT, fontSize: '8px', color: '#88aacc',
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 2);
+
+    this.setupGroup.push(overlay, panel, accent, title, subtitle);
+
+    // ── Section: NAME ───────────────────────────────────────────────────────
+    const nameLabel = this.add.text(panelX + 30, panelY + 100, 'LEVEL NAME', {
+      ...FONT, fontSize: '10px', color: '#88aacc',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(depth + 2);
+
+    const nameValue = this.add.text(panelX + 30, panelY + 128,
+      this.doc.name || '(click to set name)', {
+        ...FONT, fontSize: '14px',
+        color: this.doc.name ? '#ffff99' : '#666688',
+        backgroundColor: '#0e1424', padding: { left: 10, right: 10, top: 6, bottom: 6 },
+      }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(depth + 2)
+        .setInteractive({ useHandCursor: true });
+    nameValue.on('pointerdown', () => {
+      const next = prompt('Level name:', this.doc.name);
+      if (next === null) return;
+      this.doc.name = next.trim().slice(0, 40);
+      nameValue.setText(this.doc.name || '(click to set name)');
+      nameValue.setColor(this.doc.name ? '#ffff99' : '#666688');
+    });
+
+    this.setupGroup.push(nameLabel, nameValue);
+
+    // ── Section: MIN PLAYERS ────────────────────────────────────────────────
+    const playerLabel = this.add.text(panelX + 30, panelY + 180, 'CATEGORY', {
+      ...FONT, fontSize: '10px', color: '#88aacc',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(depth + 2);
+    this.setupGroup.push(playerLabel);
+
+    const playerOpts: { min: number; label: string; sub: string }[] = [
+      { min: 1, label: 'SOLO',  sub: '1 player' },
+      { min: 2, label: 'DUO',   sub: '2 players' },
+      { min: 4, label: 'SQUAD', sub: '4 players' },
+    ];
+    const playerCards: Phaser.GameObjects.Rectangle[] = [];
+    const playerTexts: Phaser.GameObjects.Text[] = [];
+    playerOpts.forEach((opt, i) => {
+      const cw = 180;
+      const ch = 56;
+      const cx = panelX + 30 + i * (cw + 10);
+      const cy = panelY + 200;
+      const selected = this.doc.minPlayers === opt.min;
+
+      const card = this.add.rectangle(cx, cy, cw, ch, selected ? 0x2a3e6a : 0x111625, 1)
+        .setOrigin(0).setScrollFactor(0).setDepth(depth + 2)
+        .setStrokeStyle(2, selected ? 0x88ccff : 0x2a3150)
+        .setInteractive({ useHandCursor: true });
+
+      const lbl = this.add.text(cx + cw / 2, cy + 18, opt.label, {
+        ...FONT, fontSize: '14px', color: selected ? '#ffffff' : '#aaaaaa',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 3);
+      const sub = this.add.text(cx + cw / 2, cy + 40, opt.sub, {
+        ...FONT, fontSize: '8px', color: selected ? '#88ccff' : '#666688',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 3);
+
+      card.on('pointerdown', () => {
+        this.doc.minPlayers = opt.min;
+        playerCards.forEach((c, ci) => {
+          const sel = playerOpts[ci]!.min === opt.min;
+          c.setFillStyle(sel ? 0x2a3e6a : 0x111625, 1);
+          c.setStrokeStyle(2, sel ? 0x88ccff : 0x2a3150);
+        });
+        playerTexts.forEach((t, ti) => {
+          const sel = playerOpts[Math.floor(ti / 2)]!.min === opt.min;
+          if (ti % 2 === 0) t.setColor(sel ? '#ffffff' : '#aaaaaa');
+          else              t.setColor(sel ? '#88ccff' : '#666688');
+        });
+      });
+
+      playerCards.push(card);
+      playerTexts.push(lbl, sub);
+      this.setupGroup.push(card, lbl, sub);
+    });
+
+    // ── Section: MAP WIDTH ──────────────────────────────────────────────────
+    const widthLabel = this.add.text(panelX + 30, panelY + 280, 'MAP WIDTH', {
+      ...FONT, fontSize: '10px', color: '#88aacc',
+    }).setOrigin(0, 0.5).setScrollFactor(0).setDepth(depth + 2);
+    this.setupGroup.push(widthLabel);
+
+    const widthOpts = [
+      { w: 1280, label: 'NORMAL'   },
+      { w: 1920, label: 'WIDE'     },
+      { w: 2560, label: 'EXTENDED' },
+      { w: 3200, label: 'EPIC'     },
+    ];
+    const widthCards: Phaser.GameObjects.Rectangle[] = [];
+    const widthTexts: Phaser.GameObjects.Text[] = [];
+    widthOpts.forEach((opt, i) => {
+      const cw = 135;
+      const ch = 48;
+      const cx = panelX + 30 + i * (cw + 10);
+      const cy = panelY + 300;
+      const selected = this.doc.mapWidth === opt.w;
+
+      const card = this.add.rectangle(cx, cy, cw, ch, selected ? 0x2a3e6a : 0x111625, 1)
+        .setOrigin(0).setScrollFactor(0).setDepth(depth + 2)
+        .setStrokeStyle(2, selected ? 0x88ccff : 0x2a3150)
+        .setInteractive({ useHandCursor: true });
+      const lbl = this.add.text(cx + cw / 2, cy + 16, opt.label, {
+        ...FONT, fontSize: '11px', color: selected ? '#ffffff' : '#aaaaaa',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 3);
+      const sub = this.add.text(cx + cw / 2, cy + 34, `${opt.w} px`, {
+        ...FONT, fontSize: '8px', color: selected ? '#88ccff' : '#666688',
+      }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 3);
+
+      card.on('pointerdown', () => {
+        this.doc.mapWidth = opt.w;
+        widthCards.forEach((c, ci) => {
+          const sel = widthOpts[ci]!.w === opt.w;
+          c.setFillStyle(sel ? 0x2a3e6a : 0x111625, 1);
+          c.setStrokeStyle(2, sel ? 0x88ccff : 0x2a3150);
+        });
+        widthTexts.forEach((t, ti) => {
+          const sel = widthOpts[Math.floor(ti / 2)]!.w === opt.w;
+          if (ti % 2 === 0) t.setColor(sel ? '#ffffff' : '#aaaaaa');
+          else              t.setColor(sel ? '#88ccff' : '#666688');
+        });
+      });
+
+      widthCards.push(card);
+      widthTexts.push(lbl, sub);
+      this.setupGroup.push(card, lbl, sub);
+    });
+
+    // ── Action: START EDITING ────────────────────────────────────────────────
+    const startBtn = this.add.text(W / 2, panelY + panelH - 40, 'START EDITING ▸', {
+      ...FONT, fontSize: '14px', color: '#00ff88',
+      backgroundColor: '#0a2a1a', padding: { left: 24, right: 24, top: 10, bottom: 10 },
+    }).setOrigin(0.5).setScrollFactor(0).setDepth(depth + 3)
+      .setInteractive({ useHandCursor: true });
+    startBtn.on('pointerover', () => startBtn.setColor('#ffffff'));
+    startBtn.on('pointerout',  () => startBtn.setColor('#00ff88'));
+    startBtn.on('pointerdown', () => {
+      this.dismissSetupOverlay();
+      this.repaint();
+      this.setStatus(`"${this.doc.name || '(unnamed)'}" • ${this.doc.minPlayers}+ players • ${this.doc.mapWidth}px wide. Pick a tool from the sidebar to start painting.`);
+    });
+    this.setupGroup.push(startBtn);
+  }
+
+  private dismissSetupOverlay(): void {
+    for (const g of this.setupGroup) g.destroy();
+    this.setupGroup = [];
+    this.setupActive = false;
   }
 
   private exitToMenu(): void {
