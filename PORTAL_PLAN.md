@@ -76,46 +76,45 @@ Razones:
 
 ---
 
-## 3. Candidatos de dominio (basados en research)
+## 3. Estrategia multilingüe (revisada 2026-04-29)
 
-### Tier A — Brand + keyword (recomendados)
+**Decisión:** lanzar **multilingüe desde Day 1**, con español como contenido inicial y la infraestructura preparada para inglés.
 
-| Dominio | Pros | Contras |
-|---|---|---|
-| `coopjuegos.com` | Match exacto keyword nicho. Claro. | Genérico-ish |
-| `coopjuegos.gg` | Match keyword + extensión gaming | Menos confianza que `.com` |
-| `multijuega.com` | Verbo en imperativo, dinámico | Menos directo |
-| `juegoscoop.com` | Match keyword | Suena más "técnico" |
-| `arcademos.com` | "Arcade" + "amos" (jugamos en grupo) | Inventado, requiere branding |
+**Datos que justifican el cambio:**
+- 100k pv en EE.UU./UK = $2.500-3.000/mes vs España $800-1.200 (≈3x).
+- Pero SEO en inglés es brutalmente caro y largo (Poki 184M visits/mes, CrazyGames 124M).
+- SEO en español está al alcance — Minijuegos es alcanzable, Poki/Crazy son ingleses primero.
+- Next.js i18n cuesta 1-2 días extra de dev; traducciones automatizadas vía DeepL/GPT son baratas.
 
-### Tier B — Brandables (aprovechan PikoPark IP)
+**Plan multilingüe:**
+- URL pattern: `/es/...` y `/en/...` con sub-directorios (NO subdominios).
+- Hreflang en todas las páginas.
+- Lanzamiento: `/es/` lleno, `/en/` con la infraestructura pero contenido vacío.
+- Mes 4-6: si el español tracciona, traducir el catálogo a inglés y empezar SEO en inglés.
 
-| Dominio | Pros | Contras |
-|---|---|---|
-| `pikoplay.com` / `pikoplay.gg` | Conecta con PikoPark, corto, memorable | Limita expansión más allá del Piko-universe |
-| `pikoarcade.com` | Define producto + brand | Mismo |
-| `pikoverse.com` | Suena a metaverso de juegos | Suena pretencioso |
+**Importante:** las keywords NO se traducen literal. "Co-op" en EN ≠ "cooperativo" en ES — cada idioma tiene su research propio.
 
-### Tier C — Cortos y punchy
+## 4. Candidatos de dominio (revisados — language-neutral)
 
-| Dominio | Pros | Contras |
-|---|---|---|
-| `jugar.gg` | Corto, claro | Muy probablemente taken |
-| `jugamos.gg` | Verbo plural, social | Verifica disponibilidad |
-| `2to8.gg` | Player count nicho, geek | Críptico, poco SEO |
-| `co.op` | Ultra-short, se lee "co-op" | Caro, casi seguro taken |
+`coopjuegos.com` queda **descartado** porque bloquea la opción multilingüe.
 
-### Recomendación
+### Top 3 — brandable + language-neutral
 
-**Top 3 candidatos a verificar primero**, en este orden:
+| Posición | Dominio | Pros | Contras |
+|---|---|---|---|
+| **#1** | `pikoplay.com` | Reusa IP de PikoPark. Funciona idéntico en EN y ES. Corto, memorable. | Limita expansión fuera del "Piko-universe" si vendes el portal |
+| **#2** | `coplay.gg` / `coplay.com` | "Co-play" sugiere co-op sin ser español. Neutral en ambos idiomas. Extensión gaming. | "Coplay" puede sonar a "cosplay" — verifica que no haya confusión |
+| **#3** | `coopverse.com` | "Coop" + "verse". Brand moderno de nicho. Funciona en EN/ES. | Suena un poco "metaverse-era", verifica si envejece bien |
 
-1. **`coopjuegos.com`** — máximo SEO match. Si está libre, cómpralo sin pensar.
-2. **`pikoplay.com`** — mejor para branding y reusar IP de PikoPark.
-3. **`multijuega.com`** — buen balance, verbo de acción.
+### Backups si los top 3 están tomados
 
-**Verificar en**: [Porkbun](https://porkbun.com), [Namecheap](https://namecheap.com) o [Cloudflare Registrar](https://domains.cloudflare.com).
+`playloop.gg`, `pixplay.gg`, `kogames.com`, `multigg.com`, `byteplay.gg`.
 
-> Si `coopjuegos.com` está libre, mi voto es ese. SEO directo gana al brand al inicio cuando no tienes audiencia.
+### Verificar en
+
+[Porkbun](https://porkbun.com), [Cloudflare Domains](https://domains.cloudflare.com).
+
+**No usar GoDaddy** (renovaciones agresivas, upselling).
 
 ---
 
@@ -305,6 +304,41 @@ Aproximadamente **3-4 meses post-launch** SI el SEO funciona. Si en mes 3 las im
 | Cambio algoritmo Google | Media | Alto | Diversificar tráfico (RRSS, Discord, marca directa) |
 
 ---
+
+## 7.5 Cosas críticas que casi nadie tiene en cuenta
+
+### Mobile-first o muerte
+70%+ del tráfico de gaming casual es móvil. Si la web no es mobile-first desde Day 1, Google no rankea (Mobile-First Indexing es ley desde 2021). PikoPark tiene controles touch básicos pero el portal entero debe ser mobile-first.
+
+### AdSense rechaza portales 100% iframe
+Sites mayoritariamente agregadores third-party rebotan en revisión. Necesitas contenido propio sustancial (descripciones largas únicas, blog, instrucciones detalladas) ANTES de pedir aprobación. PikoPark da ventaja aquí — es contenido propio real.
+
+### GDPR / cookie consent / páginas legales
+Si tienes UN visitante europeo, por ley necesitas:
+- Banner de consentimiento de cookies (Cookiebot free tier o autocodificado)
+- Página `/privacy` y `/terms`
+- Estas páginas son requisito de AdSense también
+
+Coste: 0€ con plantillas. Tiempo: 2-3 horas. Tener desde Day 1, no después.
+
+### Contenido programático (SEO infraexplotado)
+Una vez con 50 juegos, auto-generar páginas tipo:
+- "Mejores juegos cooperativos de plataformas para 4 jugadores"
+- "Top juegos .io para 2 jugadores sin descargar"
+
+Combinaciones de categoría × player count × género = 200-500 páginas SEO, cada una targeting una keyword distinta de cola larga. Pocos competidores en español lo hacen.
+
+### PikoPark como motor de contenido + comunidad
+Ventaja única que NADIE en el nicho tiene:
+- Clips virales de TikTok/Shorts de momentos divertidos co-op
+- Discord con torneos semanales de PikoPark
+- Email list con "drop semanal" de juegos nuevos del catálogo (Resend free 3k/mes)
+
+Ningún Minijuegos ni Poki construye marca así. Es tu foso defensivo.
+
+### Avisos sobre proveedores externos
+- **GameDistribution revshare:** verifica condiciones reales en su panel — la cifra ~60% que apareció en mi research inicial no es necesariamente la actual. Esperar 40-60% según volumen.
+- **Cloudflare vs Vercel:** Cloudflare Pages tiene bandwidth ilimitado en free tier (Vercel 100GB). Para gaming portal con tráfico variable, Cloudflare gana en escalado.
 
 ## 8. Lo que NO vamos a hacer (al menos al inicio)
 
