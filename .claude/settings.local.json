@@ -18,7 +18,8 @@
       "Bash(node -e ' *)",
       "Bash(node)",
       "Bash(node -e \"const fs=require\\('fs'\\); const p='C:/Users/david/.claude/projects/c--Projects-pikopark-online/b370957d-d1d7-4a89-9e7c-1cce6ab569d2.jsonl'; const lines=fs.readFileSync\\(p,'utf8'\\).split\\('\\\\n'\\).filter\\(Boolean\\); console.log\\('Total:',lines.length\\); lines.slice\\(-60\\).forEach\\(l=>{try{const d=JSON.parse\\(l\\);const m=d.message||{};if\\(m.role==='assistant'\\){\\(m.content||[]\\).forEach\\(c=>{if\\(c.type==='text'\\)console.log\\('A:',c.text.slice\\(0,400\\),'\\\\n---'\\)}\\);}else if\\(m.role==='user'\\){\\(m.content||[]\\).forEach\\(c=>{if\\(c.type==='text'\\)console.log\\('U:',c.text.slice\\(0,300\\),'\\\\n---'\\);}\\)}}catch\\(e\\){}}\\);\")",
-      "Bash(npx vite *)"
+      "Bash(npx vite *)",
+      "WebSearch"
     ]
   }
 }
