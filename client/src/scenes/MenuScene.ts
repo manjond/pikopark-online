@@ -43,7 +43,7 @@ export class MenuScene extends Phaser.Scene {
     const cy = this.cameras.main.height / 2;
 
     // ── Main group ──────────────────────────────────────────────────────────
-    const title = this.add.text(cx, cy - 210, 'PIKOPARK\nONLINE', {
+    const title = this.add.text(cx, cy - 210, 'WOBBLE PARK\nONLINE', {
       ...FONT, fontSize: '36px', color: '#ffffff', align: 'center',
       lineSpacing: 16,
     }).setOrigin(0.5);

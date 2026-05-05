@@ -61,7 +61,7 @@ export class AuthScene extends Phaser.Scene {
     const cx = this.cameras.main.width / 2;
     const cy = this.cameras.main.height / 2;
 
-    this.add.text(cx, cy - 260, 'PIKOPARK\nONLINE', {
+    this.add.text(cx, cy - 260, 'WOBBLE PARK\nONLINE', {
       ...FONT, fontSize: '36px', color: '#ffffff', align: 'center',
       lineSpacing: 16,
     }).setOrigin(0.5);
