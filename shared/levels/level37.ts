@@ -1,19 +1,10 @@
 import { LevelData } from '../level';
-import {
-  FLOOR_TOP,
-  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
-  standardSpawns, platformRect, fireBar, floorTrap,
-} from './_helpers';
+import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, fireBar, floorTrap } from './_helpers';
 
-// Level 37 — "Fire Maze"  (Squad Brigade)
-// Five fire bars of varying speeds and starting angles guard the corridor.
-// Players must time their dashes through the rotating segments.
-
+// L37 — "Fire Maze" (Squad Brigade)
+// 5 fire bars at staggered angles. Two latching buttons both LEFT of door.
 export const LEVEL_37: LevelData = {
-  id: 37,
-  name: 'Fire Maze',
-  minPlayers: 4,
-  mapWidth: 2400,
+  id: 37, name: 'Fire Maze', minPlayers: 4, mapWidth: 2400,
   solidRects: [
     groundSegment(0, 2400),
     platformRect(400, FLOOR_TOP - 128, 96),
@@ -29,7 +20,6 @@ export const LEVEL_37: LevelData = {
     floorButton('btn37a', 1700, 'door37', { latching: true }),
     floorButton('btn37b', 1850, 'door37', { latching: true }),
     fullHeightDoor('door37', 2050),
-    floorButton('btn37ex', 2150, 'door37', { latching: true }),
     goalOnFloor('goal37', 2340),
   ],
 };

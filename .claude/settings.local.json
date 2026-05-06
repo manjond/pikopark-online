@@ -28,7 +28,14 @@
       "Bash(git remote *)",
       "Bash(git checkout *)",
       "Bash(rm -rf node_modules/drizzle* node_modules/@neondatabase)",
-      "Bash(npx drizzle-kit *)"
+      "Bash(npx drizzle-kit *)",
+      "Bash(sed -i 's/floorTrap\\('\\\\''trap4a'\\\\'', 315, 24\\)/floorTrap\\('\\\\''trap4a'\\\\'', 400, 24\\)/' c:/Projects/pikopark-online/shared/levels/level4.ts)",
+      "Bash(sed -i 's/floorTrap\\('\\\\''lava11'\\\\'', 330, 760\\)/floorTrap\\('\\\\''lava11'\\\\'', 420, 640\\)/' c:/Projects/pikopark-online/shared/levels/level11.ts)",
+      "Bash(sed -i 's/crumbleNoRespawn\\('\\\\''cnr11a'\\\\'', 320,/crumbleNoRespawn\\('\\\\''cnr11a'\\\\'', 400,/' c:/Projects/pikopark-online/shared/levels/level11.ts)",
+      "Bash(sed -i 's/floorTrap\\('\\\\''lava21a'\\\\'', 330, 444\\)/floorTrap\\('\\\\''lava21a'\\\\'', 420, 360\\)/' c:/Projects/pikopark-online/shared/levels/level21.ts)",
+      "Bash(sed -i 's/crumblePlatform\\('\\\\''cr21a'\\\\'', 320,/crumblePlatform\\('\\\\''cr21a'\\\\'', 400,/' c:/Projects/pikopark-online/shared/levels/level21.ts)",
+      "Read(//c/Projects/**)",
+      "Bash(sed -i 's/\"version\": \"1.0.8\"/\"version\": \"1.0.9\"/' package.json)"
     ]
   }
 }

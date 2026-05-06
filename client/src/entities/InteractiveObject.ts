@@ -48,6 +48,10 @@ export class InteractiveObject {
 
   /** Button type flag: needed for correct sync color logic */
   private isLatchButton = false;
+  /** Button pad — the top surface that physically depresses on activation. */
+  private buttonPad: Phaser.GameObjects.Rectangle | null = null;
+  /** Button body side fill — the dark "box" that shows depth. */
+  private buttonBody: Phaser.GameObjects.Rectangle | null = null;
 
   /** Physics image used for local player collision (doors only). */
   private doorImg: Phaser.Physics.Arcade.Image | null = null;
@@ -79,15 +83,31 @@ export class InteractiveObject {
 
     if (data.type === 'button') {
       this.isLatchButton = !!data.latching;
-      const btnColor = this.isLatchButton ? BTN_LATCH_OFF : BTN_PRESSURE_OFF;
-      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, btnColor);
-      this.rect.setDepth(2);
-      // Small label showing type: "P" for pressure, lock icon for latch
-      const labelColor = this.isLatchButton ? '#4488ff' : '#ff9900';
-      scene.add.text(data.x, data.y - data.height / 2 - 8,
-        this.isLatchButton ? '🔒' : '▼', {
-          fontSize: '9px', color: labelColor, fontFamily: '"Press Start 2P"',
-        }).setOrigin(0.5, 1).setDepth(3).setScrollFactor(1);
+      const padColor  = this.isLatchButton ? BTN_LATCH_OFF  : BTN_PRESSURE_OFF;
+      const bodyColor = this.isLatchButton ? 0x223355       : 0x553300;
+
+      // Invisible placeholder to keep `readonly rect` satisfied; body + pad are the actual visuals
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, 0, 0);
+
+      // Body — the dark "housing" that stays fixed (depth effect)
+      const bodyH = data.height + 6;
+      this.buttonBody = scene.add.rectangle(data.x, data.y + 3, data.width, bodyH, bodyColor);
+      this.buttonBody.setDepth(2);
+
+      // Pad — the coloured top surface that depresses
+      const PAD_H = 5;
+      const PAD_RAISED_Y = data.y - 3;  // up position
+      this.buttonPad = scene.add.rectangle(data.x, PAD_RAISED_Y, data.width - 4, PAD_H, padColor);
+      this.buttonPad.setDepth(3);
+      // Highlight on pad top edge
+      scene.add.rectangle(data.x, PAD_RAISED_Y - 1, data.width - 6, 1, 0xffffff, 0.35).setDepth(4);
+
+      // Label above the button: arrow type indicator
+      const labelStr  = this.isLatchButton ? 'LOCK' : 'HOLD';
+      const labelColor = this.isLatchButton ? '#88aaff' : '#ffaa44';
+      scene.add.text(data.x, data.y - data.height / 2 - 10, labelStr, {
+        fontSize: '5px', color: labelColor, fontFamily: '"Press Start 2P"',
+      }).setOrigin(0.5, 1).setDepth(4);
 
     } else if (data.type === 'goal') {
       // ── Exit door — tall door frame with glow ─────────────────────────────
@@ -309,12 +329,34 @@ export class InteractiveObject {
   private prevActivated = false;
 
   sync(data: Pick<NetworkObject, 'activated'>): void {
-    if (this.type === 'button') {
-      if (data.activated && !this.prevActivated) playButtonPress();
-      if (data.activated) {
-        this.rect.setFillStyle(BTN_PRESSURE_ON);
-      } else {
-        this.rect.setFillStyle(this.isLatchButton ? BTN_LATCH_OFF : BTN_PRESSURE_OFF);
+    if (this.type === 'button' && this.buttonPad) {
+      const pad = this.buttonPad;
+      const PAD_RAISED_Y   = pad.y;           // current up position stored at creation
+      const PAD_PRESSED_Y  = PAD_RAISED_Y + 6; // how far down it sinks
+
+      if (data.activated && !this.prevActivated) {
+        playButtonPress();
+        // Press down: animate pad sinking
+        this.scene.tweens.killTweensOf(pad);
+        this.scene.tweens.add({
+          targets: pad,
+          y: PAD_PRESSED_Y,
+          duration: 60,
+          ease: 'Sine.easeIn',
+        });
+        pad.setFillStyle(BTN_PRESSURE_ON);
+        this.buttonBody?.setFillStyle(this.isLatchButton ? 0x114422 : 0x224400);
+      } else if (!data.activated && this.prevActivated && !this.isLatchButton) {
+        // Spring back (pressure only — latch stays down)
+        this.scene.tweens.killTweensOf(pad);
+        this.scene.tweens.add({
+          targets: pad,
+          y: PAD_RAISED_Y,
+          duration: 120,
+          ease: 'Back.easeOut',
+        });
+        pad.setFillStyle(BTN_PRESSURE_OFF);
+        this.buttonBody?.setFillStyle(0x553300);
       }
     } else if (this.type === 'door') {
       if (data.activated && !this.prevActivated) playDoorOpen();
@@ -438,6 +480,8 @@ export class InteractiveObject {
   destroy(): void {
     this.scene.tweens.killTweensOf(this.rect);
     this.rect.destroy();
+    if (this.buttonPad)  { this.scene.tweens.killTweensOf(this.buttonPad);  this.buttonPad.destroy(); }
+    if (this.buttonBody) { this.buttonBody.destroy(); }
 
     if (this.goalStar)       { this.scene.tweens.killTweensOf(this.goalStar);       this.goalStar.destroy(); }
     if (this.goalGlow)       { this.scene.tweens.killTweensOf(this.goalGlow);       this.goalGlow.destroy(); }
