@@ -2,32 +2,52 @@ import Phaser from 'phaser';
 import type { NetworkObject } from '../network/ColyseusClient';
 import { playButtonPress, playDoorOpen } from '../utils/SoundSystem';
 
-const BUTTON_INACTIVE = 0xffff00;  // yellow — waiting for player
-const BUTTON_ACTIVE   = 0x00ff88;  // green  — pressed
-const DOOR_COLOR      = 0xcc3333;  // red    — closed barrier
-const LAVA_BASE       = 0xff5500;  // orange — lava body
-const LAVA_HOT        = 0xffcc22;  // yellow — hot bubbles
-const LAVA_DARK       = 0x882200;  // dark red — shadowed crust
-const TRAP_INACTIVE   = 0x444444;  // grey — deactivated lava (after button press)
-const SPRING_BASE     = 0x22cc88;  // green  — spring body
-const SPRING_ARROW    = 0xffffff;  // white  — arrow up indicator
-const PLATFORM_FILL   = 0xc88c32;  // warm amber — moving platforms stand out vs grey static tiles
-const PLATFORM_STROKE = 0x6a4010;
-const FIREBAR_PIVOT   = 0x332222;
-const FIREBAR_CORE    = 0xffcc22;
-const FIREBAR_OUTER   = 0xff4400;
-const CRUMBLE_FILL    = 0xa88060;
-const CRUMBLE_STROKE  = 0x5a3a20;
+// Pressure button (hold to keep active)
+const BTN_PRESSURE_OFF  = 0xff9900;  // orange — pressure button, not pressed
+const BTN_PRESSURE_ON   = 0x00ff88;  // green  — pressed
+// Latch button (stays active once pressed)
+const BTN_LATCH_OFF     = 0x4488ff;  // blue   — latch button, not yet triggered
+// BTN_LATCH_ON same as BTN_PRESSURE_ON — both turn green when active
+const DOOR_COLOR        = 0xcc3333;  // red    — closed barrier
+const EXIT_DOOR_FRAME   = 0x224466;  // dark blue — exit door frame
+const EXIT_DOOR_OPEN    = 0x4488cc;  // blue glow — door is open/welcoming
+const EXIT_DOOR_DONE    = 0x22cc66;  // green — all players inside
+const LAVA_BASE         = 0xff5500;  // orange — lava body
+const LAVA_HOT          = 0xffcc22;  // yellow — hot bubbles
+const LAVA_DARK         = 0x882200;  // dark red — shadowed crust
+const TRAP_INACTIVE     = 0x444444;  // grey — deactivated lava
+const SPRING_BASE       = 0x22cc88;  // green  — spring body
+const SPRING_ARROW      = 0xffffff;  // white  — arrow up indicator
+const PLATFORM_FILL     = 0xc88c32;  // warm amber — moving platforms
+const PLATFORM_STROKE   = 0x6a4010;
+const FIREBAR_PIVOT     = 0x332222;
+const FIREBAR_CORE      = 0xffcc22;
+const FIREBAR_OUTER     = 0xff4400;
+const CRUMBLE_FILL      = 0xa88060;
+const CRUMBLE_STROKE    = 0x5a3a20;
+const BOX_FILL          = 0xb87333;  // copper brown — wooden crate
+const BOX_STROKE        = 0x6b3a1f;
+const LAVA_WALL_BASE    = 0xff3300;  // bright red — moving lava wall
+const LAVA_WALL_HOT     = 0xff8800;  // orange — hot streaks
 
 export class InteractiveObject {
   private readonly scene: Phaser.Scene;
   private readonly rect: Phaser.GameObjects.Rectangle;
   readonly type: string;
 
-  /** Goal visual components */
+  /** Exit door visual components */
   private goalLabel: Phaser.GameObjects.Text | null = null;
-  private goalStar: Phaser.GameObjects.Sprite | null = null;
+  private goalStar: Phaser.GameObjects.Sprite | null = null;   // repurposed: door glow
   private goalGlow: Phaser.GameObjects.Arc | null = null;
+  private goalCountText: Phaser.GameObjects.Text | null = null;
+
+  /** Lava wall visual components */
+  private lavaWallStrips: Phaser.GameObjects.Rectangle[] = [];
+
+  /** Pushable box component (none extra — uses this.rect) */
+
+  /** Button type flag: needed for correct sync color logic */
+  private isLatchButton = false;
 
   /** Physics image used for local player collision (doors only). */
   private doorImg: Phaser.Physics.Arcade.Image | null = null;
@@ -58,73 +78,61 @@ export class InteractiveObject {
     this.type = data.type;
 
     if (data.type === 'button') {
-      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, BUTTON_INACTIVE);
+      this.isLatchButton = !!data.latching;
+      const btnColor = this.isLatchButton ? BTN_LATCH_OFF : BTN_PRESSURE_OFF;
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, btnColor);
       this.rect.setDepth(2);
+      // Small label showing type: "P" for pressure, lock icon for latch
+      const labelColor = this.isLatchButton ? '#4488ff' : '#ff9900';
+      scene.add.text(data.x, data.y - data.height / 2 - 8,
+        this.isLatchButton ? '🔒' : '▼', {
+          fontSize: '9px', color: labelColor, fontFamily: '"Press Start 2P"',
+        }).setOrigin(0.5, 1).setDepth(3).setScrollFactor(1);
 
     } else if (data.type === 'goal') {
-      // Invisible placeholder rect to satisfy the readonly field requirement
-      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, 0, 0);
+      // ── Exit door — tall door frame with glow ─────────────────────────────
+      const doorW = Math.max(data.width, 40);
+      const doorH = Math.max(data.height * 2, 80);
+      this.rect = scene.add.rectangle(data.x, data.y, doorW, doorH, EXIT_DOOR_FRAME);
+      this.rect.setStrokeStyle(3, EXIT_DOOR_OPEN);
+      this.rect.setDepth(2);
 
-      // ── Glow circle behind the star ─────────────────────────────────────────
-      this.goalGlow = scene.add.circle(data.x, data.y, 22, 0xffd700, 0.3);
+      // Pulsing glow behind the door frame
+      this.goalGlow = scene.add.circle(data.x, data.y, doorW * 0.8, EXIT_DOOR_OPEN, 0.15);
       this.goalGlow.setDepth(1);
       scene.tweens.add({
         targets: this.goalGlow,
-        alpha: { from: 0.12, to: 0.48 },
-        scaleX: { from: 0.8, to: 1.2 },
-        scaleY: { from: 0.8, to: 1.2 },
+        alpha: { from: 0.08, to: 0.30 },
+        scaleX: { from: 0.9, to: 1.1 },
+        scaleY: { from: 0.9, to: 1.1 },
+        duration: 800,
+        yoyo: true,
+        repeat: -1,
+        ease: 'Sine.easeInOut',
+      });
+
+      // "↑ E" enter hint above the door
+      this.goalLabel = scene.add.text(data.x, data.y - doorH / 2 - 14, '↑ E', {
+        fontFamily: '"Press Start 2P"',
+        fontSize: '7px',
+        color: '#88ccff',
+      }).setOrigin(0.5, 1).setDepth(5);
+      scene.tweens.add({
+        targets: this.goalLabel,
+        y: { from: data.y - doorH / 2 - 14, to: data.y - doorH / 2 - 20 },
+        alpha: { from: 0.7, to: 1 },
         duration: 700,
         yoyo: true,
         repeat: -1,
         ease: 'Sine.easeInOut',
       });
 
-      // ── 5-pointed gold star texture (generated once per scene lifetime) ─────
-      const starKey = 'goal_star';
-      if (!scene.textures.exists(starKey)) {
-        const g = scene.add.graphics();
-        const outerR = 13;
-        const innerR  = 5;
-        const cx = 16;
-        const cy = 16;
-        const pts: { x: number; y: number }[] = [];
-        for (let i = 0; i < 10; i++) {
-          const angle = (i * Math.PI) / 5 - Math.PI / 2;
-          const r = i % 2 === 0 ? outerR : innerR;
-          pts.push({ x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) });
-        }
-        g.fillStyle(0xffd700, 1);
-        g.fillPoints(pts, true);
-        g.lineStyle(1.5, 0xffffff, 0.7);
-        g.strokePoints(pts, true);
-        g.generateTexture(starKey, 32, 32);
-        g.destroy();
-      }
-
-      this.goalStar = scene.add.sprite(data.x, data.y, starKey);
-      this.goalStar.setDepth(3);
-      scene.tweens.add({
-        targets: this.goalStar,
-        angle: 360,
-        duration: 2400,
-        repeat: -1,
-        ease: 'Linear',
-      });
-
-      // ── "GOAL" floating label ───────────────────────────────────────────────
-      this.goalLabel = scene.add.text(data.x, data.y - 26, 'GOAL', {
+      // Player count text inside the door: "0/1"
+      this.goalCountText = scene.add.text(data.x, data.y, '0/?', {
         fontFamily: '"Press Start 2P"',
-        fontSize: '5px',
-        color: '#ffd700',
-      }).setOrigin(0.5, 0.5).setDepth(4);
-      scene.tweens.add({
-        targets: this.goalLabel,
-        alpha: { from: 0.55, to: 1 },
-        duration: 600,
-        yoyo: true,
-        repeat: -1,
-        ease: 'Sine.easeInOut',
-      });
+        fontSize: '8px',
+        color: '#ffffff',
+      }).setOrigin(0.5).setDepth(6);
 
     } else if (data.type === 'trap') {
       // Main lava body — sits flush with the floor band (helpers put its top
@@ -242,6 +250,45 @@ export class InteractiveObject {
       this.rect.setStrokeStyle(2, CRUMBLE_STROKE);
       this.rect.setDepth(1);
 
+    } else if (data.type === 'lavawall') {
+      // Main wall body — positioned initially, updated every tick via setLavaWallX
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, LAVA_WALL_BASE);
+      this.rect.setDepth(5);
+      // Hot streaks along the wall
+      const streakCount = 5;
+      for (let i = 0; i < streakCount; i++) {
+        const sy = data.y - data.height / 2 + (data.height / streakCount) * (i + 0.3);
+        const strip = scene.add.rectangle(data.x + data.width * 0.1, sy, data.width * 0.6, 4, LAVA_WALL_HOT, 0.8);
+        strip.setDepth(6);
+        scene.tweens.add({
+          targets: strip,
+          alpha: { from: 0.2, to: 0.9 },
+          scaleX: { from: 0.4, to: 1 },
+          duration: 300 + i * 80,
+          delay: i * 60,
+          yoyo: true,
+          repeat: -1,
+          ease: 'Sine.easeInOut',
+        });
+        this.lavaWallStrips.push(strip);
+      }
+
+    } else if (data.type === 'box') {
+      // Wooden crate — visible rect with a simple cross-brace look
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, BOX_FILL);
+      this.rect.setStrokeStyle(3, BOX_STROKE);
+      this.rect.setDepth(3);
+      // Cross-brace markings (diagonal lines drawn via a tiny Graphics object)
+      const g = scene.add.graphics();
+      g.lineStyle(1.5, BOX_STROKE, 0.7);
+      const x1 = data.x - data.width / 2;
+      const y1 = data.y - data.height / 2;
+      const x2 = data.x + data.width / 2;
+      const y2 = data.y + data.height / 2;
+      g.strokeLineShape(new Phaser.Geom.Line(x1, y1, x2, y2));
+      g.strokeLineShape(new Phaser.Geom.Line(x2, y1, x1, y2));
+      g.setDepth(4);
+
     } else {
       // Door — full-height barrier
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, DOOR_COLOR);
@@ -264,7 +311,11 @@ export class InteractiveObject {
   sync(data: Pick<NetworkObject, 'activated'>): void {
     if (this.type === 'button') {
       if (data.activated && !this.prevActivated) playButtonPress();
-      this.rect.setFillStyle(data.activated ? BUTTON_ACTIVE : BUTTON_INACTIVE);
+      if (data.activated) {
+        this.rect.setFillStyle(BTN_PRESSURE_ON);
+      } else {
+        this.rect.setFillStyle(this.isLatchButton ? BTN_LATCH_OFF : BTN_PRESSURE_OFF);
+      }
     } else if (this.type === 'door') {
       if (data.activated && !this.prevActivated) playDoorOpen();
       this.rect.setVisible(!data.activated);
@@ -286,6 +337,33 @@ export class InteractiveObject {
   setPosition(x: number, y: number): void {
     this.rect.x = x;
     this.rect.y = y;
+  }
+
+  /** Update lava wall position — called from lavaWallPositions broadcast. */
+  setLavaWallX(x: number): void {
+    if (this.type !== 'lavawall') return;
+    this.rect.x = x;
+    this.lavaWallStrips.forEach((s) => { s.x = x + this.rect.width * 0.1; });
+  }
+
+  /** Update pushable box position — called from boxPositions broadcast. */
+  setBoxPosition(x: number, y: number): void {
+    if (this.type !== 'box') return;
+    this.rect.x = x;
+    this.rect.y = y;
+  }
+
+  /**
+   * Update the exit door count display.
+   * Call whenever `exitStates` changes.
+   */
+  setExitCount(inside: number, total: number): void {
+    if (this.type !== 'goal' || !this.goalCountText) return;
+    this.goalCountText.setText(`${inside}/${total}`);
+    const allIn = inside >= total && total > 0;
+    this.rect.setFillStyle(allIn ? EXIT_DOOR_DONE : EXIT_DOOR_FRAME);
+    this.rect.setStrokeStyle(3, allIn ? EXIT_DOOR_DONE : EXIT_DOOR_OPEN);
+    if (this.goalGlow) this.goalGlow.setFillStyle(allIn ? EXIT_DOOR_DONE : EXIT_DOOR_OPEN, 0.15);
   }
 
   /** Rotate fire-bar segments to the given pivot angle (radians). */
@@ -328,6 +406,9 @@ export class InteractiveObject {
     } else if (phase === 'respawning') {
       this.rect.setVisible(true);
       this.rect.setAlpha(0.35);
+    } else if (phase === 'gone') {
+      this.rect.setVisible(false);
+      this.rect.setAlpha(0);
     }
   }
 
@@ -358,12 +439,15 @@ export class InteractiveObject {
     this.scene.tweens.killTweensOf(this.rect);
     this.rect.destroy();
 
-    if (this.goalStar)    { this.scene.tweens.killTweensOf(this.goalStar);    this.goalStar.destroy(); }
-    if (this.goalGlow)    { this.scene.tweens.killTweensOf(this.goalGlow);    this.goalGlow.destroy(); }
-    if (this.goalLabel)   { this.scene.tweens.killTweensOf(this.goalLabel);   this.goalLabel.destroy(); }
-    if (this.springArrow) { this.scene.tweens.killTweensOf(this.springArrow); this.springArrow.destroy(); }
-    if (this.lavaTopStrip) { this.scene.tweens.killTweensOf(this.lavaTopStrip); this.lavaTopStrip.destroy(); }
+    if (this.goalStar)       { this.scene.tweens.killTweensOf(this.goalStar);       this.goalStar.destroy(); }
+    if (this.goalGlow)       { this.scene.tweens.killTweensOf(this.goalGlow);       this.goalGlow.destroy(); }
+    if (this.goalLabel)      { this.scene.tweens.killTweensOf(this.goalLabel);      this.goalLabel.destroy(); }
+    if (this.goalCountText)  { this.goalCountText.destroy(); }
+    if (this.springArrow)    { this.scene.tweens.killTweensOf(this.springArrow);    this.springArrow.destroy(); }
+    if (this.lavaTopStrip)   { this.scene.tweens.killTweensOf(this.lavaTopStrip);   this.lavaTopStrip.destroy(); }
     this.lavaBubbles.forEach((b) => { this.scene.tweens.killTweensOf(b); b.destroy(); });
+    this.lavaWallStrips.forEach((s) => { this.scene.tweens.killTweensOf(s); s.destroy(); });
+    this.lavaWallStrips = [];
 
     if (this.fireBarPivot) { this.fireBarPivot.destroy(); this.fireBarPivot = null; }
     this.fireBarSegments.forEach((s) => { this.scene.tweens.killTweensOf(s); s.destroy(); });

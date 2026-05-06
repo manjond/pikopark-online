@@ -31,7 +31,7 @@ export interface PlatformMotion {
 
 export interface LevelObjectDef {
   id: string;
-  type: 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform' | 'firebar' | 'crumble';
+  type: 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform' | 'firebar' | 'crumble' | 'lavawall' | 'box';
   x: number;      // center x
   y: number;      // center y
   width: number;
@@ -53,6 +53,10 @@ export interface LevelObjectDef {
    * Rotation speed (rad/s) is stored in `power`.
    */
   angleDeg?: number;
+  /** Only for type='lavawall' — horizontal speed in px/s (positive = moves right). */
+  speed?: number;
+  /** Only for type='crumble' — if true the platform does NOT respawn after falling. */
+  noRespawn?: boolean;
 }
 
 export interface LevelData {

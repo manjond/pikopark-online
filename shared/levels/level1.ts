@@ -1,31 +1,38 @@
 import { LevelData } from '../level';
 import {
-  fireBar,
-  floorTrap,
-  goalOnFloor,
-  groundRect,
-  standardSpawns,
+  FLOOR_TOP, SOLO_FEET_PEAK,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect,
 } from './_helpers';
 
-// Level 1 — "Spark Run"  (Pack: Solo Cadet, 1 player)
-// Easy intro to lava + firebars. Two short lava strips you can clear with
-// a running jump, plus a slow 2-segment firebar at the end whose lower
-// sweep dips toward the floor — wait for it to be vertical, then run past.
+// Level 1 — "Welcome Gate"
+// Solo. Introduce: jump a pit, then press a latching button to open the door,
+// walk through. Both sides of the door have a button so you never get trapped.
+// Pit: x 320-480 (160 px gap, well within 400 px solo reach at floor level).
+
+const plat1 = platformRect(560, FLOOR_TOP - 80, 160);    // y=608, reachable
 
 export const LEVEL_1: LevelData = {
   id: 1,
-  name: 'Spark Run',
+  name: 'Welcome Gate',
   minPlayers: 1,
+  mapWidth: 1600,
 
-  solidRects: [groundRect()],
+  solidRects: [
+    groundSegment(0, 320),           // left floor
+    groundSegment(480, 1120),        // right floor (gap 320-480, 160px)
+  ],
+
   spawnPoints: standardSpawns(),
 
   objects: [
-    floorTrap('trap1a', 360, 96),
-    floorTrap('trap1b', 640, 128),
-    // 2-segment firebar at y=608 — radius 64, dips to y=672 (just above floor).
-    // Slow rotation (1 rad/s ≈ one full turn every 6 s) gives plenty of timing.
-    fireBar('fb1', 960, 608, 2, 1.0, 0),
-    goalOnFloor('goal1', 1200),
+    // Latching button left of door — press to open, stays open forever
+    floorButton('btn1', 700, 'door1', { latching: true }),
+    // Door between the two sections
+    fullHeightDoor('door1', 840),
+    // Latching button right of door so nobody gets trapped
+    floorButton('btn2', 980, 'door1', { latching: true }),
+    // Exit door at the far right
+    goalOnFloor('goal1', 1480),
   ],
 };

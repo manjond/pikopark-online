@@ -1,32 +1,44 @@
 import { LevelData } from '../level';
 import {
-  fireBar,
-  goalOnFloor,
-  groundRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap, movingPlatform,
 } from './_helpers';
 
-// Level 8 — "Pendulum Hall"  (Pack: Solo Adept, 1 player)
-// A corridor of four firebars at floor level, each rotating in opposite
-// directions. There are no platforms — you walk on the floor, but every
-// few tiles a blade arcs into the path. Read each rotation, dash through
-// the gap, then read the next.
+// Level 8 — "Moving Day"  (Solo Adept)
+// Two moving platforms ferry the player across wide gaps.
+// Each platform has a latching button you must press mid-transit to unlock
+// the next section. Map is designed so the player has time to react.
+
+const ferry1W = 96;
+const ferry1 = movingPlatform('plat8a', 288, FLOOR_TOP - 64, ferry1W, {
+  axis: 'x', from: 288 + ferry1W / 2, to: 700 + ferry1W / 2, speed: 140,
+});
+const ferry2W = 96;
+const ferry2 = movingPlatform('plat8b', 860, FLOOR_TOP - 96, ferry2W, {
+  axis: 'x', from: 860 + ferry2W / 2, to: 1200 + ferry2W / 2, speed: 160,
+});
 
 export const LEVEL_8: LevelData = {
   id: 8,
-  name: 'Pendulum Hall',
+  name: 'Moving Day',
   minPlayers: 1,
-
-  solidRects: [groundRect()],
+  mapWidth: 1800,
+  solidRects: [
+    groundSegment(0, 288),        // spawn
+    groundSegment(800, 64),       // mid island
+    groundSegment(1300, 500),     // finish section
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // 4 firebars spread across the corridor — alternating directions plus
-    // a phase offset on every other pivot, so safe windows never line up.
-    fireBar('fb8a', 304, 580, 2, 1.5, 0),
-    fireBar('fb8b', 528, 580, 2, -1.5, 60),
-    fireBar('fb8c', 752, 580, 2, 1.8, 120),
-    fireBar('fb8d', 976, 580, 2, -1.8, 180),
-    goalOnFloor('goal8', 1200),
+    floorTrap('lava8a', 358, 448),   // lava in first gap
+    floorTrap('lava8b', 864, 432),   // lava in second gap
+    ferry1,
+    ferry2,
+    // Press button on mid island to unlock door
+    floorButton('btn8', 820, 'door8', { latching: true }),
+    fullHeightDoor('door8', 1460),
+    floorButton('btn8b', 1560, 'door8', { latching: true }),
+    goalOnFloor('goal8', 1730),
   ],
 };

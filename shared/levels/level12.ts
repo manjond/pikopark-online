@@ -1,56 +1,32 @@
 import { LevelData } from '../level';
 import {
-  crumblePlatform,
-  fireBar,
-  floorTrap,
-  goalOnFloor,
-  groundRect,
-  icePlatform,
-  movingPlatform,
-  standardSpawns,
+  FLOOR_TOP, SOLO_FEET_PEAK,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorSpring,
 } from './_helpers';
 
-// Level 12 — "Inferno"  (Pack: Solo Master, 1 player)
-// Three back-to-back hazard sections in one wide arena. Section 1: a
-// crumble bridge over lava. Section 2: a horizontal ferry threading two
-// firebars. Section 3: a long ice slide that ends on a narrow safe strip
-// inches before more lava. Run, ride, brake, breathe.
+// Level 12 — "Spring High"  (Solo Master)
+// Springs launch the player to platforms WAY above solo jump height.
+// Gate is opened by pressing a button on a spring-only-reachable platform.
 
-const MAP_W = 1920;
+const highPlat = platformRect(640, 160, 128);   // y=160 — spring required
 
 export const LEVEL_12: LevelData = {
   id: 12,
-  name: 'Inferno',
+  name: 'Spring High',
   minPlayers: 1,
-  mapWidth: MAP_W,
-
+  mapWidth: 1440,
   solidRects: [
-    groundRect(MAP_W),
-    icePlatform(1184, 565, 480),     // section 3 ice slide
+    groundSegment(0, 1440),
+    highPlat,
+    platformRect(900, FLOOR_TOP - 96, 96),   // step-down from high plat
   ],
-
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Section 1 — crumble bridge over lava.
-    floorTrap('trap12a', 416, 288),
-    crumblePlatform('cr12a', 320, 565, 96),
-    crumblePlatform('cr12b', 432, 565, 96),
-    crumblePlatform('cr12c', 544, 565, 96),
-
-    // Section 2 — horizontal ferry threading two firebars.
-    floorTrap('trap12b', 832, 384),
-    movingPlatform('mp12', 656, 470, 128, {
-      axis: 'x',
-      from: 656 + 64,
-      to:   976 + 64,
-      speed: 200,
-    }),
-    fireBar('fb12a', 752, 380, 2, 1.4,  0),
-    fireBar('fb12b', 944, 380, 2, -1.4, 90),
-
-    // Section 3 — ice slide ends right before the final lava strip.
-    floorTrap('trap12c', 1664, 64),
-    goalOnFloor('goal12', 1820),
+    floorSpring('spr12', 640, 48),             // spring under the high platform
+    floorButton('btn12', 704, 'door12', { latching: true }),   // on high platform
+    fullHeightDoor('door12', 1050),
+    floorButton('btn12b', 1160, 'door12', { latching: true }),
+    goalOnFloor('goal12', 1380),
   ],
 };

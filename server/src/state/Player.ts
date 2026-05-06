@@ -21,6 +21,8 @@ export class PlayerState extends Schema {
   // ── Server-only bookkeeping (not sent through schema) ──────────────────────
   /** Previous-tick interact state, used to detect press edges. */
   prevInteract: boolean = false;
+  /** True when this player has entered the exit door (waiting to complete). */
+  atExit: boolean = false;
   /** Last non-zero walk direction, +1 right / -1 left. Used as throw facing. */
   facing: number = 1;
   /**

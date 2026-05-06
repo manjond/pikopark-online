@@ -1,49 +1,38 @@
 import { LevelData } from '../level';
 import {
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap,
 } from './_helpers';
 
-// Level 22 — "Throw and Hold"  (Pack: Duo Synergy, 2 players)
-// Carry-throw onto a high perch where the carried player holds a pressure
-// pad. While held, the lava strip below is cold — the carrier can sprint
-// across to a latching button that opens the goal door. Reverse roles
-// don't work: the carried partner can't drop down on their own (the
-// carrier has to throw, but throwing dismounts them on the perch — see
-// below). So the partner who's lifted up *stays* on the pad while the
-// other finishes the run.
-//
-// Throw mechanic note: the rider lands on the perch as soon as they enter
-// the platform's airspace. Once on the perch, they can walk freely. The
-// pad is positioned so the rider naturally lands on it.
-
-const MAP_W = 1664;
-const PERCH      = platformRect(384,  320, 192); // throw-only (THROW_FEET_PEAK = 303)
-const LATCH_PLAT = platformRect(1216, 540, 160);
+// Level 22 — "Cross Guard"  (Duo Synergy)
+// Two simultaneous pressure buttons (requiredPlayers: 1 each) linked to
+// two separate doors. Both players must press their button at the same time
+// to open both doors. Coordinated timing required.
 
 export const LEVEL_22: LevelData = {
   id: 22,
-  name: 'Throw and Hold',
+  name: 'Cross Guard',
   minPlayers: 2,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), PERCH, LATCH_PLAT],
+  mapWidth: 2000,
+  solidRects: [
+    groundSegment(0, 2000),
+    platformRect(500, FLOOR_TOP - 128, 96),
+    platformRect(1000, FLOOR_TOP - 128, 96),
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Pressure pad on the perch — held by the thrown player.
-    platformButton('btn22hold', PERCH, 'trap22', { width: 192 }),
-    // Lava lake below — wide enough that no jump clears it; carrier must
-    // wait for partner to land on the pad and hold it down.
-    floorTrap('trap22', 832, 640),
-    // Past the cold lake, a stepping-stone latch opens the goal door.
-    platformButton('btn22latch', LATCH_PLAT, 'door22', { latching: true }),
-    fullHeightDoor('door22', 1408),
-    goalOnFloor('goal22', 1600),
+    floorTrap('trap22a', 600, 64),
+    floorTrap('trap22b', 1100, 64),
+    // Two pressure buttons: player A presses left, player B presses right
+    // Both must be held simultaneously to have both doors open
+    floorButton('btn22a', 400, 'door22a', { latching: false, requiredPlayers: 1 }),
+    floorButton('btn22b', 850, 'door22b', { latching: false, requiredPlayers: 1 }),
+    fullHeightDoor('door22a', 700),
+    fullHeightDoor('door22b', 1200),
+    // Latching buttons past each door so players can release pressure buttons
+    floorButton('btn22al', 760, 'door22a', { latching: true }),
+    floorButton('btn22bl', 1260, 'door22b', { latching: true }),
+    goalOnFloor('goal22', 1900),
   ],
 };

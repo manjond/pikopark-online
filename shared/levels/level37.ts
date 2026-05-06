@@ -1,44 +1,35 @@
 import { LevelData } from '../level';
 import {
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, fireBar, floorTrap,
 } from './_helpers';
 
-// Level 37 — "Throw Chain"  (Pack: Squad Brigade, 4 players)
-// Chain of throws. The right-most ledge is too high (throw-only), the
-// next is solo-reachable but separated by lava. Players form a launch
-// queue: P1 throws P2 onto LEDGE_A, then P3 throws P4 onto LEDGE_B
-// (which is throw-only), P4 walks to the latching button. Final door
-// opens. P1 and P3 stay behind on the spawn floor.
-
-const MAP_W = 1920;
-const LEDGE_A = platformRect(640,  395, 192); // stack-or-throw reachable
-const LEDGE_B = platformRect(1216, 320, 192); // throw-only
+// Level 37 — "Fire Maze"  (Squad Brigade)
+// Five fire bars of varying speeds and starting angles guard the corridor.
+// Players must time their dashes through the rotating segments.
 
 export const LEVEL_37: LevelData = {
   id: 37,
-  name: 'Throw Chain',
+  name: 'Fire Maze',
   minPlayers: 4,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), LEDGE_A, LEDGE_B],
+  mapWidth: 2400,
+  solidRects: [
+    groundSegment(0, 2400),
+    platformRect(400, FLOOR_TOP - 128, 96),
+    platformRect(900, FLOOR_TOP - 128, 96),
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Wide chasm between spawn and the goal column.
-    floorTrap('t37chasm', 528, 480),
-    // Mid pressure pad on LEDGE_A — held by the player thrown there.
-    platformButton('b37hold', LEDGE_A, 'trap37', { width: 192 }),
-    // Lava strip past LEDGE_B's drop-zone — only cold while pad held.
-    floorTrap('trap37', 1408, 192),
-    // Throw-only latch on LEDGE_B — opens the goal door.
-    platformButton('b37latch', LEDGE_B, 'door37', { latching: true }),
-    fullHeightDoor('door37', 1664),
-    goalOnFloor('goal37', 1856),
+    fireBar('fb37a', 380,  FLOOR_TOP - 48, 2,  1.0,   0),
+    fireBar('fb37b', 640,  FLOOR_TOP - 48, 2, -1.2,  60),
+    fireBar('fb37c', 900,  FLOOR_TOP - 48, 3,  1.4, 120),
+    fireBar('fb37d', 1200, FLOOR_TOP - 48, 2, -0.9, 180),
+    fireBar('fb37e', 1500, FLOOR_TOP - 48, 3,  1.6,  30),
+    floorButton('btn37a', 1700, 'door37', { latching: true }),
+    floorButton('btn37b', 1850, 'door37', { latching: true }),
+    fullHeightDoor('door37', 2050),
+    floorButton('btn37ex', 2150, 'door37', { latching: true }),
+    goalOnFloor('goal37', 2340),
   ],
 };

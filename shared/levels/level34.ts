@@ -1,56 +1,38 @@
 import { LevelData } from '../level';
-import { TILE_SIZE } from '../constants';
 import {
-  floorSpring,
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap, fireBar,
 } from './_helpers';
 
-// Level 34 — "Spring Squad"  (Pack: Squad Crew, 4 players)
-// Four spring pads launch four players up to four high latching buttons.
-// Buttons live in the spring-only band (y around 200) — too high for any
-// solo/stack/throw, only a spring reaches. All four must latch to open
-// the goal door. The 4th twist: a lava strip on the floor between the
-// fourth pad and the goal — only cold while one player holds the central
-// pressure pedestal. So three latch their springs, then the four players
-// must replay: one holds the pedestal, the others traverse to the goal.
+// Level 34 — "Division"  (Squad Crew)
+// Players split into two pairs. Pair A presses buttons on the upper route,
+// Pair B on the lower. Both routes must be cleared for the final door.
 
-const MAP_W = 2240;
-const TILE = TILE_SIZE;
-
-const PAD1 = platformRect(192,  200, 192);
-const PAD2 = platformRect(640,  200, 192);
-const PAD3 = platformRect(1088, 200, 192);
-const PAD4 = platformRect(1536, 200, 192);
-const PED  = platformRect(1024, 540, 192);
+const upperRoute = platformRect(500, FLOOR_TOP - 192, 640);
 
 export const LEVEL_34: LevelData = {
   id: 34,
-  name: 'Spring Squad',
+  name: 'Division',
   minPlayers: 4,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), PAD1, PAD2, PAD3, PAD4, PED],
+  mapWidth: 2400,
+  solidRects: [
+    groundSegment(0, 2400),
+    upperRoute,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorSpring('s34a',  288),
-    floorSpring('s34b',  736),
-    floorSpring('s34c', 1184),
-    floorSpring('s34d', 1632),
-    platformButton('b34a', PAD1, 'door34', { latching: true, width: TILE, yOffset: 4 }),
-    platformButton('b34b', PAD2, 'door34', { latching: true, width: TILE, yOffset: 4 }),
-    platformButton('b34c', PAD3, 'door34', { latching: true, width: TILE, yOffset: 4 }),
-    platformButton('b34d', PAD4, 'door34', { latching: true, width: TILE, yOffset: 4 }),
-    // Pedestal pressure pad — holds the lava cold.
-    platformButton('b34hold', PED, 'trap34', { width: 192 }),
-    floorTrap('trap34', 1856, 320),
-    fullHeightDoor('door34', 2080),
-    goalOnFloor('goal34', 2176),
+    floorTrap('trap34low', 480, 96),
+    // Upper route: two players press these
+    floorButton('btn34u1', upperRoute.x + 160, 'door34', { latching: true }),
+    floorButton('btn34u2', upperRoute.x + 480, 'door34', { latching: true }),
+    // Lower route: two players press these
+    floorButton('btn34l1', 650,  'door34', { latching: true }),
+    floorButton('btn34l2', 950,  'door34', { latching: true }),
+    fireBar('fb34', 1200, FLOOR_TOP - 48, 2, 1.1, 0),
+    // All four buttons share door34 — all must be pressed
+    fullHeightDoor('door34', 1500),
+    floorButton('btn34ex', 1610, 'door34', { latching: true }),
+    goalOnFloor('goal34', 2340),
   ],
 };

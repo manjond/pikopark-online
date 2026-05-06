@@ -1,37 +1,36 @@
 import { LevelData } from '../level';
 import {
-  crumblePlatform,
-  floorTrap,
-  goalOnFloor,
-  groundRect,
-  icePlatform,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap, pushBox,
 } from './_helpers';
 
-// Level 9 — "Ice Race"  (Pack: Solo Adept, 1 player)
-// Two long ice runways flank a short crumble bridge. The lava lake
-// underneath punishes any pause. Run, brake on the gap of ground between
-// the ice and the crumbles, sprint across the crumbles before they fall,
-// then nail the brake on the second ice plate before its drop-off.
+// Level 9 — "Box Job"  (Solo Adept)
+// First pushable-box level. A pressure button requires the crate to be pushed
+// onto it to open the door. The button stays active as long as the box is on it.
+// The player can then walk through while the box holds the button.
+
+const btnPlatform = platformRect(800, FLOOR_TOP - 32, 96);  // button sits here
 
 export const LEVEL_9: LevelData = {
   id: 9,
-  name: 'Ice Race',
+  name: 'Box Job',
   minPlayers: 1,
-
+  mapWidth: 1440,
   solidRects: [
-    groundRect(),
-    icePlatform(288, 565, 256),   // first ice run
-    icePlatform(800, 565, 256),   // second ice run
+    groundSegment(0, 1440),
+    btnPlatform,
   ],
-
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorTrap('trap9', 672, 640),
-    crumblePlatform('cr9a', 560, 565, 96),
-    crumblePlatform('cr9b', 672, 565, 96),
-    crumblePlatform('cr9c', 784, 565, 96),
-    goalOnFloor('goal9', 1200),
+    // The crate starts next to a lava strip — player must push it right
+    floorTrap('trap9', 480, 80),
+    pushBox('box9', 300, FLOOR_TOP - 32),
+    // Pressure button: box resting on the platform top activates it
+    floorButton('btn9', btnPlatform.x + 48, 'door9', { latching: false }),
+    fullHeightDoor('door9', 1050),
+    // Latching button on exit side so player doesn't need to carry box back
+    floorButton('btn9b', 1150, 'door9', { latching: true }),
+    goalOnFloor('goal9', 1380),
   ],
 };

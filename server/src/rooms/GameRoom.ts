@@ -357,6 +357,15 @@ export class GameRoom extends Room<GameState> {
       if (def.type === 'crumble') {
         obj.crumblePhase = 'intact';
         obj.crumbleTimer = 0;
+        obj.noRespawn = def.noRespawn ?? false;
+      }
+      if (def.type === 'lavawall') {
+        obj.lavaWallSpeed = def.speed ?? 100;
+        obj.lavaWallX = def.x;
+      }
+      if (def.type === 'box') {
+        obj.boxVX = 0;
+        obj.boxVY = 0;
       }
       this.state.interactiveObjects.set(def.id, obj);
       this.prevObjStates.set(def.id, false);
@@ -377,6 +386,7 @@ export class GameRoom extends Room<GameState> {
       player.carriedBy = '';
       player.carrying = '';
       player.prevInteract = false;
+      player.atExit = false;
       spawnIndex++;
     });
 
@@ -430,8 +440,13 @@ export class GameRoom extends Room<GameState> {
             obj.crumblePhase = 'falling';
             obj.crumbleTimer = 2000;
           } else if (obj.crumblePhase === 'falling') {
-            obj.crumblePhase = 'respawning';
-            obj.crumbleTimer = 800;
+            if (obj.noRespawn) {
+              obj.crumblePhase = 'gone';
+              obj.crumbleTimer = 0;
+            } else {
+              obj.crumblePhase = 'respawning';
+              obj.crumbleTimer = 800;
+            }
           } else if (obj.crumblePhase === 'respawning') {
             obj.crumblePhase = 'intact';
           }
@@ -788,67 +803,179 @@ export class GameRoom extends Room<GameState> {
       }
     }
 
-    // ── Goal detection ─────────────────────────────────────────────────────────
-    if (!this.levelCompleted) {
+    // ── Fall-death — player falls off the bottom of the map ──────────────────
+    if (!this.levelCompleted && !this.trapRestartPending) {
       this.state.players.forEach((player) => {
-        if (this.levelCompleted) return;
-        const pLeft   = player.x - TILE_SIZE / 2;
-        const pRight  = player.x + TILE_SIZE / 2;
-        const pTop    = player.y - TILE_SIZE / 2;
-        const pBottom = player.y + TILE_SIZE / 2;
-        this.state.interactiveObjects.forEach((obj) => {
-          if (obj.type !== 'goal' || this.levelCompleted) return;
-          const gLeft  = obj.x - obj.width  / 2;
-          const gRight = obj.x + obj.width  / 2;
-          const gTop   = obj.y - obj.height / 2;
-          const gBot   = obj.y + obj.height / 2;
-          if (pRight > gLeft && pLeft < gRight && pBottom > gTop && pTop < gBot) {
-            this.levelCompleted = true;
+        if (this.trapRestartPending || player.carriedBy) return;
+        if (player.y > GAME_HEIGHT + TILE_SIZE * 3) this.trapRestartPending = true;
+      });
+      if (this.trapRestartPending) {
+        this.broadcast('trapHit', {});
+        this.clock.setTimeout(() => { this.loadLevel(this.currentLevelIndex, true); }, 600);
+      }
+    }
 
-            // ── Leaderboard entry ────────────────────────────────────────────
-            const elapsedMs = Date.now() - this.levelStartMs;
-            const levelId = this.state.currentLevel;
-            const playerNames: string[] = [];
-            this.state.players.forEach((p) => playerNames.push(p.name));
-            const rank = this.leaderboard.tryInsert(levelId, {
-              timeMs: elapsedMs,
-              players: playerNames,
-              completedAt: new Date().toISOString(),
-            });
-            const top = this.leaderboard.getTop(levelId);
+    // ── Lava wall — advance position and kill players on contact ──────────────
+    if (!this.levelCompleted && !this.trapRestartPending) {
+      this.state.interactiveObjects.forEach((obj) => {
+        if (obj.type !== 'lavawall') return;
+        obj.lavaWallX += obj.lavaWallSpeed * dt;
+        obj.x = obj.lavaWallX;
+        const wallRight = obj.lavaWallX + obj.width / 2;
+        this.state.players.forEach((player) => {
+          if (this.trapRestartPending) return;
+          if (player.x - TILE_SIZE / 2 < wallRight) this.trapRestartPending = true;
+        });
+      });
+      if (this.trapRestartPending) {
+        this.broadcast('trapHit', {});
+        this.clock.setTimeout(() => { this.loadLevel(this.currentLevelIndex, true); }, 500);
+      }
+    }
 
-            this.broadcast('levelComplete', {
-              playerName: player.name,
-              timeMs: elapsedMs,
-              levelId,
-              newRecordRank: rank,   // 1-based rank if in top, else null
-              top,
-            });
+    // ── Box physics — gravity, floor/platform collision, player push ──────────
+    const BOX_PUSH_SPEED = MOVE_SPEED * 0.55;
+    const subDtBox = dt / SUBSTEPS;
+    this.state.interactiveObjects.forEach((box) => {
+      if (box.type !== 'box') return;
+      for (let sub = 0; sub < SUBSTEPS; sub++) {
+        box.boxVY += GRAVITY * subDtBox;
+        box.x += box.boxVX * subDtBox;
+        box.y += box.boxVY * subDtBox;
+        box.x = Math.max(box.width / 2, Math.min(this.mapWidth - box.width / 2, box.x));
 
-            const nextIndex = this.currentLevelIndex + 1;
-            if (nextIndex < this.selectedPack.levels.length) {
-              this.clock.setTimeout(() => { this.loadLevel(nextIndex); }, 5000);
-            } else {
-              // Pack is finished. Instead of going silent (which used to leave
-              // the client's level-complete fade-out stuck in black), tell
-              // clients the pack is done and offer choices for what's next.
-              this.packCompletedPending = true;
-              const activeCount = this.state.players.size;
-              const available = ALL_PACKS
-                .filter((p) => activeCount >= p.minPlayers)
-                .map((p) => ({ id: p.id, name: p.name, minPlayers: p.minPlayers }));
-              this.clock.setTimeout(() => {
-                this.broadcast('packComplete', {
-                  completedPackId: this.selectedPack.id,
-                  completedPackName: this.selectedPack.name,
-                  recommendedNextId: getRecommendedNextPackId(this.selectedPack.id),
-                  availablePacks: available,
-                });
-              }, 4200);
-            }
+        const bL = box.x - box.width / 2;
+        const bR = box.x + box.width / 2;
+        const bB = box.y + box.height / 2;
+        let grounded = false;
+
+        for (const rect of this.solidRects) {
+          const rL = rect.x;
+          const rR = rect.x + rect.width;
+          const rT = rect.y;
+          if (bR > rL && bL < rR && box.boxVY >= 0 && bB >= rT && bB <= rT + TILE_SIZE * 0.8) {
+            box.y = rT - box.height / 2;
+            box.boxVY = 0;
+            grounded = true;
+            break;
+          }
+        }
+        if (grounded) {
+          box.boxVX *= 0.75;
+          if (Math.abs(box.boxVX) < 4) box.boxVX = 0;
+        }
+
+        // Players push box by walking into it
+        this.state.players.forEach((player) => {
+          if (player.carriedBy) return;
+          const pL = player.x - TILE_SIZE / 2;
+          const pR = player.x + TILE_SIZE / 2;
+          const pT = player.y - TILE_SIZE / 2;
+          const pBotBox = box.y + box.height / 2;
+          const bTop    = box.y - box.height / 2;
+          const vertOk  = pBotBox > pT + 4 && player.y - TILE_SIZE / 2 < pBotBox - 4;
+          if (!vertOk) return;
+          if (player.velocityX > 0 && pR > bL && pL < bL + 10) {
+            box.boxVX = BOX_PUSH_SPEED;
+            box.x = player.x + TILE_SIZE / 2 + box.width / 2 + 1;
+          } else if (player.velocityX < 0 && pL < bR && pR > bR - 10) {
+            box.boxVX = -BOX_PUSH_SPEED;
+            box.x = player.x - TILE_SIZE / 2 - box.width / 2 - 1;
+          }
+        });
+      }
+    });
+
+    // ── Box-button activation — boxes resting on buttons count as weight ──────
+    this.state.interactiveObjects.forEach((btn) => {
+      if (btn.type !== 'button' || (btn.latching && btn.activated)) return;
+      const bL   = btn.x - btn.width  / 2;
+      const bR   = btn.x + btn.width  / 2;
+      const bTop = btn.y - btn.height / 2;
+      this.state.interactiveObjects.forEach((box) => {
+        if (box.type !== 'box') return;
+        const boxL = box.x - box.width  / 2;
+        const boxR = box.x + box.width  / 2;
+        const boxB = box.y + box.height / 2;
+        if (boxR > bL && boxL < bR && Math.abs(boxB - bTop) < TILE_SIZE * 0.75 && box.boxVY === 0) {
+          btn.activated = true;
+        }
+      });
+    });
+
+    // ── Exit door — interact near goal to enter/exit; all in = level complete ──
+    if (!this.levelCompleted) {
+      let exitChanged = false;
+      this.state.interactiveObjects.forEach((obj) => {
+        if (obj.type !== 'goal') return;
+        const proximity = TILE_SIZE * 2;
+        const gLeft  = obj.x - obj.width  / 2 - proximity;
+        const gRight = obj.x + obj.width  / 2 + proximity;
+        const gTop   = obj.y - obj.height / 2;
+        const gBot   = obj.y + obj.height / 2;
+        this.state.players.forEach((player) => {
+          const near = player.x > gLeft && player.x < gRight &&
+                       player.y + TILE_SIZE / 2 > gTop && player.y - TILE_SIZE / 2 < gBot;
+          const interactEdge = player.isInteracting && !player.prevInteract;
+          if (near && interactEdge) {
+            player.atExit = !player.atExit;
+            exitChanged = true;
+          } else if (!near && player.atExit) {
+            player.atExit = false;
+            exitChanged = true;
           }
         });
       });
+
+      if (exitChanged) {
+        const exitStates: Array<{ id: string; atExit: boolean }> = [];
+        this.state.players.forEach((p) => exitStates.push({ id: p.id, atExit: p.atExit }));
+        this.broadcast('exitStates', exitStates);
+      }
+
+      // Complete when every active player is waiting at the exit
+      let allAtExit = true;
+      let anyPlayer = false;
+      this.state.players.forEach((p) => { anyPlayer = true; if (!p.atExit) allAtExit = false; });
+
+      if (anyPlayer && allAtExit) {
+        this.levelCompleted = true;
+        const elapsedMs = Date.now() - this.levelStartMs;
+        const levelId = this.state.currentLevel;
+        const playerNames: string[] = [];
+        this.state.players.forEach((p) => playerNames.push(p.name));
+        const rank = this.leaderboard.tryInsert(levelId, {
+          timeMs: elapsedMs,
+          players: playerNames,
+          completedAt: new Date().toISOString(),
+        });
+        const top = this.leaderboard.getTop(levelId);
+        this.broadcast('levelComplete', {
+          playerName: playerNames[0] ?? 'Team',
+          timeMs: elapsedMs,
+          levelId,
+          newRecordRank: rank,
+          top,
+        });
+        const nextIndex = this.currentLevelIndex + 1;
+        if (nextIndex < this.selectedPack.levels.length) {
+          this.clock.setTimeout(() => { this.loadLevel(nextIndex); }, 5000);
+        } else {
+          this.packCompletedPending = true;
+          const activeCount = this.state.players.size;
+          const available = ALL_PACKS
+            .filter((p) => activeCount >= p.minPlayers)
+            .map((p) => ({ id: p.id, name: p.name, minPlayers: p.minPlayers }));
+          this.clock.setTimeout(() => {
+            this.broadcast('packComplete', {
+              completedPackId: this.selectedPack.id,
+              completedPackName: this.selectedPack.name,
+              recommendedNextId: getRecommendedNextPackId(this.selectedPack.id),
+              availablePacks: available,
+            });
+          }, 4200);
+        }
+      }
     }
 
     // ── Broadcast positions every tick ─────────────────────────────────────────
@@ -909,7 +1036,6 @@ export class GameRoom extends Room<GameState> {
     }
 
     // ── Broadcast carry links (edge-triggered only, to save bandwidth) ─────────
-    // Clients read this to show pickup/throw visuals.
     if (this.carryChanged) {
       const carryList: Array<{ carrierId: string; carriedId: string }> = [];
       this.state.players.forEach((p) => {
@@ -918,6 +1044,23 @@ export class GameRoom extends Room<GameState> {
       this.broadcast('carryStates', carryList);
       this.carryChanged = false;
     }
+
+    // ── Broadcast lava wall positions every tick ────────────────────────────────
+    const lavaWallPositions: Array<{ id: string; x: number }> = [];
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type === 'lavawall') lavaWallPositions.push({ id: obj.id, x: obj.lavaWallX });
+    });
+    if (lavaWallPositions.length > 0) this.broadcast('lavaWallPositions', lavaWallPositions);
+
+    // ── Broadcast box positions every tick ────────────────────────────────────
+    const boxPositions: Array<{ id: string; x: number; y: number }> = [];
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type === 'box') boxPositions.push({ id: obj.id, x: obj.x, y: obj.y });
+    });
+    if (boxPositions.length > 0) this.broadcast('boxPositions', boxPositions);
+
+    // ── Update prevInteract for all players at end of tick ────────────────────
+    this.state.players.forEach((p) => { p.prevInteract = p.isInteracting; });
   }
 
   // ─── Pickup/throw handling ────────────────────────────────────────────────────
@@ -943,7 +1086,6 @@ export class GameRoom extends Room<GameState> {
 
     this.state.players.forEach((carrier) => {
       const pressEdge = carrier.isInteracting && !carrier.prevInteract;
-      carrier.prevInteract = carrier.isInteracting;
       if (!pressEdge) return;
       // Being carried → pressing interact has no effect here (only the carrier throws)
       if (carrier.carriedBy) return;

@@ -1,45 +1,39 @@
 import { LevelData } from '../level';
 import {
-  fireBar,
-  floorTrap,
-  goalOnPlatform,
-  groundRect,
-  movingPlatform,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, lavaWall, floorTrap, fireBar,
 } from './_helpers';
 
-// Level 10 — "Vertical Trial"  (Pack: Solo Adept, 1 player)
-// A wide lava lake leaves no walkable floor between spawn and the goal
-// column. A vertical lift carries you up to a chain of three stepping
-// ledges, each placed within a single jump of the next. Two firebars
-// mid-air force you to time each crossing.
+// Level 10 — "Speed Run"  (Solo Adept)
+// Lava wall + fire bar obstacle. Wall moves at 110 px/s.
+// Player must weave around obstacles and press two latching buttons quickly.
+// Map: 2800 px. At 110 px/s wall reaches spawn in ~25 s — plenty of time
+// if the player doesn't dawdle, but punishing if they freeze.
 
-const MAP_W = 1280;
-const STEP_A   = platformRect(320,  320, 192); // first catwalk, beside lift apex
-const STEP_B   = platformRect(640,  320, 192); // second catwalk
-const GOAL_PAD = platformRect(992,  300, 192); // goal mesa, slightly higher
+const bypass = platformRect(900, FLOOR_TOP - 128, 128);
 
 export const LEVEL_10: LevelData = {
   id: 10,
-  name: 'Vertical Trial',
+  name: 'Speed Run',
   minPlayers: 1,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), STEP_A, STEP_B, GOAL_PAD],
+  mapWidth: 2800,
+  solidRects: [
+    groundSegment(0, 2800),
+    bypass,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorTrap('trap10', 720, 896),
-    // Vertical lift — center x=192, rides between top-y=580 and top-y=300.
-    movingPlatform('mp10', 128, 580, 128, {
-      axis: 'y',
-      from: 580 + 16,
-      to:   300 + 16,
-      speed: 100,
-    }),
-    fireBar('fb10a', 544, 380, 3,  1.4, 0),
-    fireBar('fb10b', 864, 380, 3, -1.6, 90),
-    goalOnPlatform('goal10', GOAL_PAD),
+    lavaWall('wall10', -64, 110),
+    floorTrap('trap10a', 560, 80),
+    fireBar('fb10', 760, FLOOR_TOP - 48, 2, 1.3, 45),
+    floorButton('btn10a', 1100, 'door10a', { latching: true }),
+    fullHeightDoor('door10a', 1300),
+    floorButton('btn10ab', 1420, 'door10a', { latching: true }),
+    floorTrap('trap10b', 1600, 96),
+    floorButton('btn10b', 1900, 'door10b', { latching: true }),
+    fullHeightDoor('door10b', 2100),
+    floorButton('btn10bb', 2200, 'door10b', { latching: true }),
+    goalOnFloor('goal10', 2700),
   ],
 };

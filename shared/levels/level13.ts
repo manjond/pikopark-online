@@ -1,43 +1,40 @@
 import { LevelData } from '../level';
 import {
-  crumblePlatform,
-  fireBar,
-  floorSpring,
-  floorTrap,
-  goalOnPlatform,
-  groundRect,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, floorTrap, fireBar, lavaWall, platformRect,
 } from './_helpers';
 
-// Level 13 — "Spring Tower"  (Pack: Solo Master, 1 player)
-// A vertical climb. The spring at the foot launches you near the rooftop.
-// On the way up you pass two firebars guarding two crumble platforms — you
-// can only land on one for a heartbeat before it falls. Reach the goal
-// roost at the top of the tower.
+// Level 13 — "Lava Chase + Fire"  (Solo Master)
+// Lava wall at 120 px/s + two fire bars the player must dodge.
+// Tight timing required. Map 3200 px wide.
 
-const MAP_W = 1280;
-const MID_A    = platformRect(384, 280, 192);
-const TOP_LIP  = platformRect(800, 200, 192);
-const GOAL_PAD = platformRect(960, 100, 192);
+const bypass = platformRect(960, FLOOR_TOP - 128, 128);
 
 export const LEVEL_13: LevelData = {
   id: 13,
-  name: 'Spring Tower',
+  name: 'Lava Chase & Fire',
   minPlayers: 1,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), MID_A, TOP_LIP, GOAL_PAD],
+  mapWidth: 3200,
+  solidRects: [
+    groundSegment(0, 3200),
+    bypass,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorTrap('trap13', 480, 768),       // floor is mostly lava — no falling back
-    floorSpring('spring13', 96),
-    // Crumbles between MID_A and TOP_LIP — break the rise into two stages.
-    crumblePlatform('cr13a', 576, 235, 96),
-    crumblePlatform('cr13b', 704, 160, 96),
-    fireBar('fb13a', 480, 200, 3, 1.5, 0),
-    fireBar('fb13b', 800, 130, 2, -1.8, 90),
-    goalOnPlatform('goal13', GOAL_PAD),
+    lavaWall('wall13', -64, 120),
+    floorTrap('trap13a', 480,  80),
+    fireBar('fb13a',     700,  FLOOR_TOP - 48, 2, 1.4,   0),
+    floorTrap('trap13b', 1200, 80),
+    fireBar('fb13b',     1450, FLOOR_TOP - 48, 3, -1.1, 60),
+    floorButton('btn13a', 1700, 'door13a', { latching: true }),
+    fullHeightDoor('door13a', 1900),
+    floorButton('btn13ab', 2000, 'door13a', { latching: true }),
+    floorTrap('trap13c', 2300, 80),
+    fireBar('fb13c', 2500, FLOOR_TOP - 48, 2, 1.6, 180),
+    floorButton('btn13b', 2800, 'door13b', { latching: true }),
+    fullHeightDoor('door13b', 3000),
+    floorButton('btn13bb', 3080, 'door13b', { latching: true }),
+    goalOnFloor('goal13', 3140),
   ],
 };

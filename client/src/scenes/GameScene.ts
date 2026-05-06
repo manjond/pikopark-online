@@ -486,6 +486,29 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
+    // ── Exit door states — update player count display on the goal door ────
+    this.onRoomMessage<Array<{ id: string; atExit: boolean }>>(room, 'exitStates', (list) => {
+      const inside = list.filter((e) => e.atExit).length;
+      const total  = list.length;
+      this.interactiveObjects.forEach((obj) => {
+        if (obj.type === 'goal') obj.setExitCount(inside, total);
+      });
+    });
+
+    // ── Lava wall positions (server sends every tick) ───────────────────────
+    this.onRoomMessage<Array<{ id: string; x: number }>>(room, 'lavaWallPositions', (list) => {
+      for (const lw of list) {
+        this.interactiveObjects.get(lw.id)?.setLavaWallX(lw.x);
+      }
+    });
+
+    // ── Pushable box positions (server sends every tick) ────────────────────
+    this.onRoomMessage<Array<{ id: string; x: number; y: number }>>(room, 'boxPositions', (list) => {
+      for (const b of list) {
+        this.interactiveObjects.get(b.id)?.setBoxPosition(b.x, b.y);
+      }
+    });
+
     // ── Pickup/throw events — feedback sounds + floating label text ────────
     this.onRoomMessage<{ carrierId: string; carriedId: string }>(room, 'pickup', (data) => {
       this.showCarryFloater(data.carrierId, 'PICK UP', 0x88ddff);
@@ -547,7 +570,11 @@ export class GameScene extends Phaser.Scene {
       this.interactiveObjects.set(def.id, iObj);
 
       if (def.type === 'door') this.doorPrevActivated.set(def.id, false);
-      if (def.type === 'goal') this.goalPosition = { x: def.x, y: def.y };
+      if (def.type === 'goal') {
+        this.goalPosition = { x: def.x, y: def.y };
+        // Initialise exit counter with the current player count (0 inside)
+        iObj.setExitCount(0, this.players.size);
+      }
     }
   }
 
@@ -1004,40 +1031,80 @@ export class GameScene extends Phaser.Scene {
   // ─── Touch controls ───────────────────────────────────────────────────────────
 
   private createTouchControls(): void {
-    const H = GAME_HEIGHT;
-    const BTN = 32;
-    const alpha = 0.35;
-    const FONT = { fontFamily: '"Press Start 2P"', fontSize: '10px', color: '#ffffff' };
+    // Enable multi-touch so left+right+jump can be held simultaneously
+    this.input.addPointer(3);
 
-    const makeBtn = (
-      x: number, y: number, label: string,
+    const W = GAME_WIDTH;
+    const H = GAME_HEIGHT;
+
+    // Left side: directional buttons
+    const BTN_W = 90;
+    const BTN_H = 80;
+    const BTN_Y = H - 55;
+    const LABEL = { fontFamily: '"Press Start 2P"', fontSize: '16px', color: '#ffffff' };
+    const HINT  = { fontFamily: '"Press Start 2P"', fontSize: '8px',  color: '#aaaaaa' };
+    const BASE_ALPHA = 0.45;
+
+    const makeHoldBtn = (
+      x: number, y: number, w: number, h: number,
+      label: string, color: number,
       onDown: () => void, onUp: () => void,
     ): void => {
       const bg = this.add
-        .rectangle(x, y, BTN, BTN, 0xffffff, alpha)
-        .setScrollFactor(0).setDepth(30).setInteractive();
-      this.add.text(x, y, label, FONT)
+        .rectangle(x, y, w, h, color, BASE_ALPHA)
+        .setScrollFactor(0).setDepth(30)
+        .setInteractive({ useHandCursor: false });
+      bg.setStrokeStyle(2, 0xffffff, 0.3);
+      this.add.text(x, y, label, LABEL)
         .setOrigin(0.5).setScrollFactor(0).setDepth(31);
-      bg.on('pointerdown', onDown);
-      bg.on('pointerup', onUp);
-      bg.on('pointerout', onUp);
+
+      bg.on('pointerdown',  (_ptr: Phaser.Input.Pointer) => { bg.setAlpha(0.75); onDown(); });
+      bg.on('pointerup',    (_ptr: Phaser.Input.Pointer) => { bg.setAlpha(BASE_ALPHA); onUp(); });
+      bg.on('pointerout',   (_ptr: Phaser.Input.Pointer) => { bg.setAlpha(BASE_ALPHA); onUp(); });
+      bg.on('pointerover',  () => { /* drag-enter not needed — pointerdown handles press */ });
     };
 
-    makeBtn(22, H - 20, '<',
+    const makeOneShot = (
+      x: number, y: number, w: number, h: number,
+      label: string, hint: string, color: number,
+      onDown: () => void,
+    ): void => {
+      const bg = this.add
+        .rectangle(x, y, w, h, color, BASE_ALPHA)
+        .setScrollFactor(0).setDepth(30)
+        .setInteractive({ useHandCursor: false });
+      bg.setStrokeStyle(2, 0xffffff, 0.3);
+      this.add.text(x, y - 6, label, LABEL)
+        .setOrigin(0.5).setScrollFactor(0).setDepth(31);
+      this.add.text(x, y + 14, hint, HINT)
+        .setOrigin(0.5).setScrollFactor(0).setDepth(31);
+
+      bg.on('pointerdown', (_ptr: Phaser.Input.Pointer) => {
+        bg.setAlpha(0.75);
+        onDown();
+      });
+      bg.on('pointerup',  (_ptr: Phaser.Input.Pointer) => { bg.setAlpha(BASE_ALPHA); });
+      bg.on('pointerout', (_ptr: Phaser.Input.Pointer) => { bg.setAlpha(BASE_ALPHA); });
+    };
+
+    // Left arrow
+    makeHoldBtn(BTN_W / 2 + 10, BTN_Y, BTN_W, BTN_H, '◄', 0x334477,
       () => { this.touchLeft = true; },
       () => { this.touchLeft = false; },
     );
-    makeBtn(58, H - 20, '>',
+    // Right arrow
+    makeHoldBtn(BTN_W + BTN_W / 2 + 16, BTN_Y, BTN_W, BTN_H, '►', 0x334477,
       () => { this.touchRight = true; },
       () => { this.touchRight = false; },
     );
-    makeBtn(GAME_WIDTH - 22, H - 20, 'A',
+
+    // Jump button (big, right side)
+    makeOneShot(W - 60, BTN_Y, 100, BTN_H, '▲', 'JUMP', 0x226633,
       () => { this.touchJumpPending = true; },
-      () => { /* one-shot */ },
     );
-    makeBtn(GAME_WIDTH - 58, H - 20, 'E',
+    // Interact button (below jump)
+    makeOneShot(W - 170, BTN_Y, 90, BTN_H, 'E', 'ACT', 0x553322,
       () => { this.touchInteractPending = true; },
-      () => { /* one-shot */ },
     );
   }
 

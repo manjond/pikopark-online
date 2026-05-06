@@ -1,39 +1,36 @@
 import { LevelData } from '../level';
 import {
-  fireBar,
-  floorSpring,
-  floorTrap,
-  goalOnPlatform,
-  groundRect,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, lavaWall,
 } from './_helpers';
 
-// Level 5 — "Hop High"  (Pack: Solo Cadet, 1 player)
-// A spring pad launches you high over a wide lava pit, but a tall fire bar
-// rotates through the airspace. Bounce, dodge, and land on the goal mesa
-// on the far side. The intermediate landing pad gives you a checkpoint to
-// reassess; missing it means a second spring attempt.
+// Level 5 — "Sprint!"
+// Solo. A lava wall advances from the left at 90 px/s. Player must run right,
+// press a latching button, and enter the exit before the wall catches up.
+// Map is 2400 px wide — at 90 px/s the wall takes ~26 s to cross the map,
+// giving the player plenty of time but requiring steady movement.
 
-const MID_PLAT  = platformRect(512, 365, 192);
-const GOAL_PLAT = platformRect(1024, 395, 224);
+const plat1 = platformRect(800,  FLOOR_TOP - 96, 128);   // hop over lava strip
+const plat2 = platformRect(1280, FLOOR_TOP - 96, 128);   // second hop
 
 export const LEVEL_5: LevelData = {
   id: 5,
-  name: 'Hop High',
+  name: 'Sprint!',
   minPlayers: 1,
-
-  solidRects: [groundRect(), MID_PLAT, GOAL_PLAT],
+  mapWidth: 2400,
+  solidRects: [
+    groundSegment(0, 2400),
+    plat1, plat2,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorTrap('trap5a', 560, 400),
-    // Spring at x=160 gives ~600 px of rise — easily clears the 365 mid-plat.
-    floorSpring('spring5', 160),
-    // 3-segment firebar pivoting between the mid plat and the goal mesa.
-    // Radius 96 sweeps between y=269 and y=461, so you must time both your
-    // launch and the leap from the mid-plat to the goal.
-    fireBar('fb5', 768, 365, 3, 1.2, 0),
-    goalOnPlatform('goal5', GOAL_PLAT),
+    // Lava wall starts off-screen left, moves right at 90 px/s
+    lavaWall('wall5', -64, 90),
+    // A few lava strips to add routing variety
+    floorButton('btn5', 1550, 'door5', { latching: true }),
+    fullHeightDoor('door5', 1750),
+    floorButton('btn5b', 1880, 'door5', { latching: true }),
+    goalOnFloor('goal5', 2300),
   ],
 };

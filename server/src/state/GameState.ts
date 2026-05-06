@@ -51,6 +51,18 @@ export class ObjectState extends Schema {
   /** Tracks whether prevMotionPos has been initialised. */
   private prevMotionPosInit: boolean = false;
 
+  // ── Lava wall (server-only) ───────────────────────────────────────────────
+  /** px/s speed the lava wall moves (positive = rightward). */
+  lavaWallSpeed: number = 0;
+  /** Current X position of the lava wall's right edge. */
+  lavaWallX: number = 0;
+
+  // ── Pushable box (server-only) ────────────────────────────────────────────
+  boxVX: number = 0;
+  boxVY: number = 0;
+  /** Whether crumble should NOT respawn. */
+  noRespawn: boolean = false;
+
   /**
    * Advance motion by `dtMs` and update x/y, plus velocities for riders.
    * Safe to call on non-moving platforms (no-op).

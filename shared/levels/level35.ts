@@ -1,50 +1,38 @@
 import { LevelData } from '../level';
 import {
-  crumblePlatform,
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, floorTrap, crumblePlatform,
 } from './_helpers';
 
-// Level 35 — "Crumble Race"  (Pack: Squad Crew, 4 players)
-// Four parallel crumble lanes over a single lava lake. Each lane ends at
-// a stack-only latching button on its own little ledge. All four must be
-// latched to open the goal door. Players race in tandem — if anyone
-// pauses mid-lane, their plate falls. After the lanes, pair up to stack
-// each ledge: 4 players, 4 ledges, must coordinate stack-pairs.
-
-const MAP_W = 1920;
-const LEDGE1 = platformRect(384,  400, 96);
-const LEDGE2 = platformRect(640,  400, 96);
-const LEDGE3 = platformRect(896,  400, 96);
-const LEDGE4 = platformRect(1152, 400, 96);
+// Level 35 — "Pressure All"  (Squad Crew)
+// Four simultaneous pressure buttons (requiredPlayers:1 each) all linked to
+// one door. ALL four must be held at the same time. Latching button far side.
 
 export const LEVEL_35: LevelData = {
   id: 35,
-  name: 'Crumble Race',
+  name: 'Pressure All',
   minPlayers: 4,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), LEDGE1, LEDGE2, LEDGE3, LEDGE4],
+  mapWidth: 2000,
+  solidRects: [
+    groundSegment(0, 2000),
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorTrap('t35', 720, 832),
-    // 4 parallel crumble lanes.
-    crumblePlatform('c35a1', 320,  600, 96), crumblePlatform('c35a2', 320,  540, 96), crumblePlatform('c35a3', 320,  480, 96),
-    crumblePlatform('c35b1', 576,  600, 96), crumblePlatform('c35b2', 576,  540, 96), crumblePlatform('c35b3', 576,  480, 96),
-    crumblePlatform('c35c1', 832,  600, 96), crumblePlatform('c35c2', 832,  540, 96), crumblePlatform('c35c3', 832,  480, 96),
-    crumblePlatform('c35d1', 1088, 600, 96), crumblePlatform('c35d2', 1088, 540, 96), crumblePlatform('c35d3', 1088, 480, 96),
-    // 4 stack-only latching buttons.
-    platformButton('b35a', LEDGE1, 'door35', { latching: true }),
-    platformButton('b35b', LEDGE2, 'door35', { latching: true }),
-    platformButton('b35c', LEDGE3, 'door35', { latching: true }),
-    platformButton('b35d', LEDGE4, 'door35', { latching: true }),
-    fullHeightDoor('door35', 1440),
-    goalOnFloor('goal35', 1856),
+    // Crumble platforms add routing variety between buttons
+    crumblePlatform('cr35a', 600,  FLOOR_TOP - 32, 96),
+    crumblePlatform('cr35b', 800,  FLOOR_TOP - 32, 96),
+    crumblePlatform('cr35c', 1000, FLOOR_TOP - 32, 96),
+    floorTrap('trap35a', 570, 24),
+    floorTrap('trap35b', 770, 24),
+    floorTrap('trap35c', 970, 24),
+    // Four pressure buttons — all must be active simultaneously
+    floorButton('btn35a', 300,  'door35', { latching: false, requiredPlayers: 1 }),
+    floorButton('btn35b', 450,  'door35', { latching: false, requiredPlayers: 1 }),
+    floorButton('btn35c', 600,  'door35', { latching: false, requiredPlayers: 1 }),
+    floorButton('btn35d', 750,  'door35', { latching: false, requiredPlayers: 1 }),
+    fullHeightDoor('door35', 1300),
+    floorButton('btn35ex', 1410, 'door35', { latching: true }),
+    goalOnFloor('goal35', 1920),
   ],
 };

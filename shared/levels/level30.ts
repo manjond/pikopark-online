@@ -1,82 +1,55 @@
 import { LevelData } from '../level';
 import {
-  crumblePlatform,
-  fireBar,
-  floorButton,
-  floorSpring,
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  icePlatform,
-  movingPlatform,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP, STACK3_FEET_PEAK,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap, fireBar,
+  crumbleNoRespawn, lavaWall, pushBox, floorSpring,
 } from './_helpers';
 
-// Level 30 — "Apex Duo"  (Pack: Duo Trust, 2 players — boss)
-// Five-stage duo gauntlet on a wide map. Every cooperative mechanic is
-// load-bearing here:
-//   1. Pressure-pad-and-spring: A holds pad → spring re-arms → B bounces
-//      onto the high catwalk. (Without the pad, the spring's launch is
-//      too short — modelled by hiding the spring inside a lava strip
-//      that's only cold while the pad is held.)
-//   2. Crumble bridge over lava — both players run together.
-//   3. Stack-only latching button on the upper catwalk.
-//   4. Vertical lift threading two firebars — one rider at a time.
-//   5. Ice slide finale into the goal.
-// Final door opens after both latch buttons are flipped.
+// Level 30 — "Duo Trust Finale"
+// Epic duo finale: all mechanics combined. Very long map (4000 px).
+// Wall speed 95 px/s. Both players must coordinate throughout.
 
-const MAP_W = 2560;
-const PAD     = platformRect(96,   540, 96);
-const HI_CAT  = platformRect(384,  300, 256); // throw + spring landing
-const HI_BTN  = platformRect(704,  300, 192); // stack-only on top of catwalk
-const LIFT_DOCK_TOP = 540;
-const LIFT_TOP_TOP  = 320;
-const ICE     = icePlatform(2080, 460, 320);
-const GOAL_LIP = platformRect(2400, 460, 128);
+const highPlat = platformRect(2400, 200, 128);
 
 export const LEVEL_30: LevelData = {
   id: 30,
-  name: 'Apex Duo',
+  name: 'Duo Trust Finale',
   minPlayers: 2,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), PAD, HI_CAT, HI_BTN, ICE, GOAL_LIP],
+  mapWidth: 4000,
+  solidRects: [
+    groundSegment(0, 320),
+    groundSegment(900, 480),
+    groundSegment(1700, 480),
+    groundSegment(2350, 1650),
+    highPlat,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Stage 1 — pad enables the launch zone.
-    platformButton('btn30hold', PAD, 'trap30launch', { width: 96 }),
-    floorTrap('trap30launch', 352, 192),
-    floorSpring('spring30', 352),
-
-    // Stage 2 — crumble bridge over a long lake.
-    floorTrap('trap30bridge', 928, 768),
-    crumblePlatform('cr30a',  672, 565, 96),
-    crumblePlatform('cr30b',  832, 565, 96),
-    crumblePlatform('cr30c',  992, 565, 96),
-    crumblePlatform('cr30d', 1152, 565, 96),
-    crumblePlatform('cr30e', 1312, 565, 96),
-
-    // Stage 3 — upper-catwalk stack-only latching button.
-    platformButton('btn30high', HI_BTN, 'door30hi', { latching: true }),
-    fullHeightDoor('door30hi', 1568),
-
-    // Stage 4 — vertical lift between two firebars.
-    movingPlatform('mp30', 1632, LIFT_DOCK_TOP, 128, {
-      axis: 'y',
-      from: LIFT_DOCK_TOP + 16,
-      to:   LIFT_TOP_TOP  + 16,
-      speed: 100,
-    }),
-    fireBar('fb30a', 1808, 460, 3, 1.6,  0),
-    fireBar('fb30b', 1984, 460, 3, -1.4, 90),
-
-    // Stage 5 — final ice runway then the goal lip.
-    floorButton('btn30finlatch', 1888, 'door30goal', { latching: true }),
-    fullHeightDoor('door30goal', 2336),
-    goalOnFloor('goal30', 2496),
+    lavaWall('wall30', -64, 95),
+    floorTrap('lava30a', 320, 576),
+    crumbleNoRespawn('cnr30a', 320, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr30b', 464, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr30c', 608, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr30d', 752, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr30e', 848, FLOOR_TOP - 32, 96),
+    floorTrap('lava30b', 1380, 64),
+    fireBar('fb30a', 1200, FLOOR_TOP - 48, 2, 1.3, 0),
+    floorTrap('lava30c', 1700, 576),
+    pushBox('box30a', 1600, FLOOR_TOP - 32),
+    pushBox('box30b', 1800, FLOOR_TOP - 32),
+    floorButton('btn30boxa', 1900, 'door30a', { latching: true }),
+    floorButton('btn30boxb', 2100, 'door30a', { latching: true }),
+    fullHeightDoor('door30a', 2300),
+    floorButton('btn30aex', 2360, 'door30a', { latching: true }),
+    floorSpring('spr30', 2390, 48),
+    floorButton('btn30spr', 2504, 'door30b', { latching: true }),
+    fullHeightDoor('door30b', 2800),
+    floorButton('btn30bex', 2870, 'door30b', { latching: true }),
+    fireBar('fb30b', 3100, FLOOR_TOP - 48, 3, -1.2, 60),
+    floorButton('btn30c', 3500, 'door30c', { latching: true }),
+    floorButton('btn30d', 3700, 'door30c', { latching: true }),
+    fullHeightDoor('door30c', 3800),
+    goalOnFloor('goal30', 3920),
   ],
 };

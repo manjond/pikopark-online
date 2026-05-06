@@ -1,62 +1,52 @@
 import { LevelData } from '../level';
 import {
-  crumblePlatform,
-  fireBar,
-  floorButton,
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP, STACK2_FEET_PEAK, STACK3_FEET_PEAK,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap, fireBar, pushBox,
+  movingPlatform,
 } from './_helpers';
 
-// Level 44 — "Fire Storm"  (Pack: Squad Legion, 4 players)
-// Wide arena packed with eight firebars at varying heights and speeds.
-// Three pressure pads on the spawn rim each link to a different lava
-// strip in the bridge — three players hold while the fourth threads
-// the bars to a stack-only latching button at the far end. The held
-// players are committed for the whole crossing; one wrong release and
-// the runner cooks. Final kicker — a row of crumble plates after the
-// stack-only button feeds into the goal.
+// Level 44 — "Synchronized"  (Squad Legion)
+// Moving platforms + fire bars + boxes. Complex timing for all 4 players.
 
-const MAP_W = 2560;
-const STACK_FINAL = platformRect(1920, 400, 192);
+const ferryW = 96;
+const ferry1 = movingPlatform('plat44a', 400, FLOOR_TOP - 80, ferryW, {
+  axis: 'x', from: 400 + ferryW / 2, to: 800 + ferryW / 2, speed: 150,
+});
+const ferry2 = movingPlatform('plat44b', 1000, FLOOR_TOP - 112, ferryW, {
+  axis: 'x', from: 1000 + ferryW / 2, to: 1400 + ferryW / 2, speed: 180,
+});
+const stackPlat = platformRect(2200, STACK2_FEET_PEAK, 128);
 
 export const LEVEL_44: LevelData = {
   id: 44,
-  name: 'Fire Storm',
+  name: 'Synchronized',
   minPlayers: 4,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), STACK_FINAL],
+  mapWidth: 3200,
+  solidRects: [
+    groundSegment(0, 400),
+    groundSegment(900, 128),
+    groundSegment(1500, 700),
+    groundSegment(2300, 900),
+    stackPlat,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Three pressure pads → three lava strips along the bridge.
-    floorButton('b44hA', 96,  't44A'),
-    floorButton('b44hB', 224, 't44B'),
-    floorButton('b44hC', 352, 't44C'),
-    floorTrap('t44A',  608, 192),
-    floorTrap('t44B', 1024, 192),
-    floorTrap('t44C', 1440, 192),
-    // Eight firebars — alternating directions, varying segments.
-    fireBar('fb44a',  608, 580, 2, 1.4,  0),
-    fireBar('fb44b',  800, 460, 3, -1.6, 60),
-    fireBar('fb44c', 1024, 580, 2, 1.8,  120),
-    fireBar('fb44d', 1216, 460, 3, -1.4, 180),
-    fireBar('fb44e', 1440, 580, 2, 2.0,  240),
-    fireBar('fb44f', 1632, 460, 3, -1.8, 0),
-    fireBar('fb44g', 1824, 540, 2, 1.6,  90),
-    fireBar('fb44h', 2016, 380, 2, -1.6, 180),
-    // Stack-only latch.
-    platformButton('b44latch', STACK_FINAL, 'door44', { latching: true }),
-    fullHeightDoor('door44', 2240),
-    // Crumble approach to the goal.
-    floorTrap('t44spit', 2384, 192),
-    crumblePlatform('cr44a', 2304, 565, 96),
-    crumblePlatform('cr44b', 2432, 565, 96),
-    goalOnFloor('goal44', 2528),
+    floorTrap('lava44a', 400, 500),
+    floorTrap('lava44b', 1030, 470),
+    ferry1, ferry2,
+    floorButton('btn44a', 960, 'door44a', { latching: true }),
+    fullHeightDoor('door44a', 1200),
+    floorButton('btn44ab', 1280, 'door44a', { latching: true }),
+    fireBar('fb44a', 1800, FLOOR_TOP - 48, 2, 1.2, 0),
+    pushBox('box44a', 1700, FLOOR_TOP - 32),
+    pushBox('box44b', 1850, FLOOR_TOP - 32),
+    floorButton('btn44b', 2000, 'door44b', { latching: false }),
+    floorButton('btn44c', 2100, 'door44b', { latching: false }),
+    floorButton('btn44stack', stackPlat.x + 64, 'door44b', { latching: true }),
+    floorButton('btn44d', 2600, 'door44b', { latching: true }),
+    fullHeightDoor('door44b', 2800),
+    floorButton('btn44ex', 2880, 'door44b', { latching: true }),
+    goalOnFloor('goal44', 3100),
   ],
 };

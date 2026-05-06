@@ -1,44 +1,33 @@
 import { LevelData } from '../level';
 import {
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP, STACK2_FEET_PEAK,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap,
 } from './_helpers';
 
-// Level 17 — "Hand Up"  (Pack: Duo Allies, 2 players)
-// Introduces carry/throw. The button that opens the goal door sits on a
-// platform too high for solo, too high for stack, too high for spring —
-// it lives in the throw-only band (top y in [303, 357)). The carrier
-// picks the partner up with E, walks to the launch spot, presses E again
-// to throw upward. The thrown player lands on the perch and latches the
-// button. The throw eats some momentum from the lava — pick the launch
-// spot carefully.
+// Level 17 — "Stacker"  (Duo Allies)
+// A button sits on a platform only reachable via 2-player stack jump.
+// Platform top at y=STACK2_FEET_PEAK=389, so jumping from floor to it
+// requires one player to stand on the other's head (stack jump).
 
-const MAP_W = 1280;
-const PERCH = platformRect(640, 320, 192); // throw-only (THROW_FEET_PEAK = 303)
+const stackPlat = platformRect(700, STACK2_FEET_PEAK, 96);   // y=389
 
 export const LEVEL_17: LevelData = {
   id: 17,
-  name: 'Hand Up',
+  name: 'Stacker',
   minPlayers: 2,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), PERCH],
+  mapWidth: 1600,
+  solidRects: [
+    groundSegment(0, 1600),
+    stackPlat,
+    platformRect(900, FLOOR_TOP - 96, 96),   // step-down
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Two short lava strips frame the launch zone — encourages a calm
-    // pick-up rather than running through the throw.
-    floorTrap('trap17a', 304, 96),
-    floorTrap('trap17b', 896, 96),
-    // Latching button on the perch — once pressed, the door stays open
-    // and both players walk through to the goal.
-    platformButton('btn17', PERCH, 'door17', { latching: true }),
-    fullHeightDoor('door17', 1024),
-    goalOnFloor('goal17', 1200),
+    floorTrap('trap17', 480, 80),
+    floorButton('btn17', stackPlat.x + 48, 'door17', { latching: true }),
+    fullHeightDoor('door17', 1200),
+    floorButton('btn17b', 1320, 'door17', { latching: true }),
+    goalOnFloor('goal17', 1530),
   ],
 };

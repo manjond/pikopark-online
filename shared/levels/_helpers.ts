@@ -359,6 +359,87 @@ export function goalOnPlatform(id: string, platform: SolidRect): LevelObjectDef 
   };
 }
 
+/**
+ * Crumbling platform that does NOT respawn — once fallen, the gap is permanent.
+ * Use for puzzles where order and irreversibility are the challenge.
+ */
+export function crumbleNoRespawn(
+  id: string,
+  x: number,
+  yTop: number,
+  width: number = TILE_SIZE * 3,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'crumble',
+    x: x + width / 2,
+    y: yTop + TILE_SIZE / 2,
+    width,
+    height: TILE_SIZE,
+    requiredPlayers: 0,
+    linkedId: '',
+    noRespawn: true,
+  };
+}
+
+/**
+ * A lava wall that moves horizontally at `speed` px/s (positive = rightward).
+ * Starting position `x` is the center of the wall. Players touched by the
+ * wall die and the level restarts. Use to create time-pressure runs.
+ * Typical speed: 80–140 px/s. Map should be wide enough to complete before
+ * the wall reaches the exit.
+ */
+export function lavaWall(
+  id: string,
+  x: number,
+  speed: number = 100,
+  width: number = 48,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'lavawall',
+    x,
+    y: GAME_HEIGHT / 2,
+    width,
+    height: GAME_HEIGHT,
+    requiredPlayers: 0,
+    linkedId: '',
+    speed,
+  };
+}
+
+/**
+ * A pushable wooden crate. Players push it by walking into it; it falls with
+ * gravity and can land on buttons to activate them. Width and height default
+ * to one tile (32×32).
+ */
+export function pushBox(
+  id: string,
+  x: number,
+  yTop: number,
+  size: number = TILE_SIZE,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'box',
+    x: x + size / 2,
+    y: yTop + size / 2,
+    width: size,
+    height: size,
+    requiredPlayers: 0,
+    linkedId: '',
+  };
+}
+
+/**
+ * A ground-level segment (partial floor). Use multiple `groundSegment` calls
+ * instead of a single `groundRect()` to create pits/gaps that players can
+ * fall into (fall-off triggers a level restart server-side).
+ */
+export function groundSegment(x: number, width: number): SolidRect {
+  return { x, y: FLOOR_TOP, width, height: TILE_SIZE, tileType: 'ground' };
+}
+
 // ─── Level validator ──────────────────────────────────────────────────────────
 
 export interface ValidationIssue {

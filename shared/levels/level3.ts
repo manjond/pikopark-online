@@ -1,41 +1,33 @@
 import { LevelData } from '../level';
 import {
-  fireBar,
-  floorTrap,
-  goalOnFloor,
-  groundRect,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap,
 } from './_helpers';
 
-// Level 3 — "Fire Walk"  (Pack: Solo Cadet, 1 player)
-// Three lava strips on the floor and three rotating fire bars overhead.
-// The platforms above each lava strip act as bridges — but the firebars
-// sweep across them, so each step must be timed. Counter-rotation on the
-// middle bar means you have to re-read the timing for the second crossing.
+// Level 3 — "Lava Dodge"
+// Solo. Lava strips block path; platforms above bypass them.
+// Two latching buttons on each side of door — no trapping possible.
 
-const BRIDGE_A = platformRect(304, 565, 96);
-const BRIDGE_B = platformRect(624, 565, 96);
-const BRIDGE_C = platformRect(944, 565, 96);
+const plat1 = platformRect(320, FLOOR_TOP - 112, 128);
+const plat2 = platformRect(640, FLOOR_TOP - 112, 128);
 
 export const LEVEL_3: LevelData = {
   id: 3,
-  name: 'Fire Walk',
+  name: 'Lava Dodge',
   minPlayers: 1,
-
-  solidRects: [groundRect(), BRIDGE_A, BRIDGE_B, BRIDGE_C],
+  mapWidth: 1600,
+  solidRects: [
+    groundSegment(0, 1600),
+    plat1, plat2,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorTrap('trap3a', 352, 96),
-    floorTrap('trap3b', 672, 96),
-    floorTrap('trap3c', 992, 96),
-    // Pivots sit just above each bridge — segs=1 keeps the sweep tight, so
-    // you can read each rotation cleanly. Alternating directions keep you
-    // honest as you cross.
-    fireBar('fb3a', 352, 480, 1, 1.5, 0),
-    fireBar('fb3b', 672, 480, 1, -1.5, 90),
-    fireBar('fb3c', 992, 480, 1, 2.0, 180),
-    goalOnFloor('goal3', 1200),
+    floorTrap('trap3a', 400, 128),
+    floorTrap('trap3b', 720, 112),
+    floorButton('btn3a', 1050, 'door3', { latching: true }),
+    fullHeightDoor('door3', 1200),
+    floorButton('btn3b', 1340, 'door3', { latching: true }),
+    goalOnFloor('goal3', 1520),
   ],
 };

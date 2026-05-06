@@ -1,54 +1,39 @@
 import { LevelData } from '../level';
 import {
-  fireBar,
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  movingPlatform,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, floorTrap, pushBox, fireBar,
 } from './_helpers';
 
-// Level 39 — "Lift Brigade"  (Pack: Squad Brigade, 4 players)
-// A wide vertical lift carries the squad up past two firebars to a high
-// landing. Three latching buttons sit on three separate top-perches at
-// throw-only height — each must be reached by stepping off the lift at
-// the right moment, or by being thrown off the lift's top by a partner.
-// All three latched → final door opens.
+// Level 39 — "Complex Grid"  (Squad Brigade)
+// Boxes, fire bars, and split routes — squad must coordinate across all zones.
 
-const MAP_W = 1920;
-const LIFT_X = 320;
-const PERCH_A = platformRect(640,  300, 160); // throw-or-lift reachable
-const PERCH_B = platformRect(960,  300, 160);
-const PERCH_C = platformRect(1280, 300, 160);
+const upperPlatA = platformRect(600,  FLOOR_TOP - 160, 128);
+const upperPlatB = platformRect(1100, FLOOR_TOP - 160, 128);
 
 export const LEVEL_39: LevelData = {
   id: 39,
-  name: 'Lift Brigade',
+  name: 'Complex Grid',
   minPlayers: 4,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), PERCH_A, PERCH_B, PERCH_C],
+  mapWidth: 2800,
+  solidRects: [
+    groundSegment(0, 2800),
+    upperPlatA, upperPlatB,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    floorTrap('t39', 1152, 1408),
-    // Wide vertical lift — fits 2-3 players at once.
-    movingPlatform('lift39', LIFT_X - 80, 540, 160, {
-      axis: 'y',
-      from: 540 + 16,
-      to:   316 + 16,
-      speed: 110,
-    }),
-    fireBar('fb39a', 480, 460, 3, 1.5,  0),
-    fireBar('fb39b', 800, 380, 3, -1.6, 90),
-    // Three latching buttons on the perches.
-    platformButton('b39A', PERCH_A, 'door39', { latching: true }),
-    platformButton('b39B', PERCH_B, 'door39', { latching: true }),
-    platformButton('b39C', PERCH_C, 'door39', { latching: true }),
-    fullHeightDoor('door39', 1568),
-    goalOnFloor('goal39', 1856),
+    pushBox('box39a', 300, FLOOR_TOP - 32),
+    pushBox('box39b', 500, FLOOR_TOP - 32),
+    floorButton('btn39box1', 700,  'door39a', { latching: false }),
+    floorButton('btn39box2', 900,  'door39a', { latching: false }),
+    fullHeightDoor('door39a', 1100),
+    floorButton('btn39la1', 1150, 'door39a', { latching: true }),
+    fireBar('fb39a', 1250, FLOOR_TOP - 48, 2, 1.2, 0),
+    floorButton('btn39up1', upperPlatA.x + 64, 'door39b', { latching: true }),
+    floorButton('btn39up2', upperPlatB.x + 64, 'door39b', { latching: true }),
+    fireBar('fb39b', 1700, FLOOR_TOP - 48, 2, -1.0, 90),
+    fullHeightDoor('door39b', 2000),
+    floorButton('btn39ex', 2100, 'door39b', { latching: true }),
+    goalOnFloor('goal39', 2720),
   ],
 };

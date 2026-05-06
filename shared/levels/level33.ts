@@ -1,44 +1,37 @@
 import { LevelData } from '../level';
 import {
-  floorButton,
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, pushBox, floorTrap,
 } from './_helpers';
 
-// Level 33 — "Pyramid"  (Pack: Squad Crew, 4 players)
-// 3-stack-only platform: only a 3-player tower reaches the high latching
-// button (top y=370 → STACK3 band). One player has to stay on the
-// pressure pad below to keep the lava bridge between spawn and the
-// pyramid's base cool. Once the latch flips, the door opens and any
-// player walks through to the goal.
-
-const MAP_W = 1920;
-const PYRAMID_TOP = platformRect(704, 370, 192); // 3-stack only
-const PED         = platformRect(96,  540, 96);
+// Level 33 — "Box Corp"  (Squad Crew)
+// Four crates, four latching buttons. Each of the 4 players pushes one box
+// into its slot. Once all four buttons latch, the door opens.
 
 export const LEVEL_33: LevelData = {
   id: 33,
-  name: 'Pyramid',
+  name: 'Box Corp',
   minPlayers: 4,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W), PYRAMID_TOP, PED],
+  mapWidth: 2400,
+  solidRects: [
+    groundSegment(0, 2400),
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Holder pad on side step.
-    platformButton('btn33hold', PED, 'trap33', { width: 96 }),
-    floorTrap('trap33', 544, 480),
-    // 3-stack latching button.
-    platformButton('btn33top', PYRAMID_TOP, 'door33', { latching: true }),
-    fullHeightDoor('door33', 1408),
-    // Final twist — short lava strip past the door, jumpable but tight.
-    floorTrap('trap33spit', 1568, 96),
-    goalOnFloor('goal33', 1856),
+    pushBox('box33a', 200, FLOOR_TOP - 32),
+    pushBox('box33b', 450, FLOOR_TOP - 32),
+    pushBox('box33c', 700, FLOOR_TOP - 32),
+    pushBox('box33d', 950, FLOOR_TOP - 32),
+    floorTrap('trap33a', 490, 16),
+    floorTrap('trap33b', 740, 16),
+    floorTrap('trap33c', 990, 16),
+    floorTrap('trap33d', 1240, 16),
+    floorButton('btn33a', 500,  'door33', { latching: true }),
+    floorButton('btn33b', 750,  'door33', { latching: true }),
+    floorButton('btn33c', 1000, 'door33', { latching: true }),
+    floorButton('btn33d', 1250, 'door33', { latching: true }),
+    fullHeightDoor('door33', 1700),
+    goalOnFloor('goal33', 2340),
   ],
 };

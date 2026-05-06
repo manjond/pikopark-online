@@ -1,64 +1,54 @@
 import { LevelData } from '../level';
 import {
-  crumblePlatform,
-  fireBar,
-  floorButton,
-  floorTrap,
-  fullHeightDoor,
-  goalOnFloor,
-  groundRect,
-  platformButton,
-  platformRect,
-  standardSpawns,
+  FLOOR_TOP, STACK3_FEET_PEAK,
+  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
+  standardSpawns, platformRect, fireBar, floorTrap, lavaWall,
+  crumbleNoRespawn,
 } from './_helpers';
 
-// Level 42 — "Maze Squad"  (Pack: Squad Legion, 4 players)
-// Wide map split into four cells by full-height doors. Each cell has its
-// own latching button — but each button can only be pressed AFTER the
-// previous cell's pressure pad opens its door. Four pressure pads + four
-// latches + four doors. Every player has a job in every cell, and the
-// natural play is: rotate roles cell-by-cell so nobody is locked out.
+// Level 42 — "Full House"  (Squad Legion)
+// Long complex level with all squad mechanics.
 
-const MAP_W = 2880;
+const highPlat = platformRect(3200, STACK3_FEET_PEAK, 128);
 
 export const LEVEL_42: LevelData = {
   id: 42,
-  name: 'Maze Squad',
+  name: 'Full House',
   minPlayers: 4,
-  mapWidth: MAP_W,
-
-  solidRects: [groundRect(MAP_W)],
+  mapWidth: 4000,
+  solidRects: [
+    groundSegment(0, 320),
+    groundSegment(900, 400),
+    groundSegment(1600, 400),
+    groundSegment(2400, 1600),
+    highPlat,
+  ],
   spawnPoints: standardSpawns(),
-
   objects: [
-    // Cell 1 → Cell 2.
-    floorButton('b42holdA', 96,  'door42A'),
-    fullHeightDoor('door42A', 384),
-    floorButton('b42latchA', 192, 'door42goal', { latching: true }),
-    floorTrap('t42a', 544, 96),
-    fireBar('fb42a', 544, 580, 2, 1.4, 0),
-
-    // Cell 2 → Cell 3.
-    floorButton('b42holdB', 736, 'door42B'),
-    fullHeightDoor('door42B', 992),
-    floorButton('b42latchB', 832, 'door42goal', { latching: true }),
-    floorTrap('t42b', 1152, 96),
-    crumblePlatform('cr42', 1184, 565, 96),
-
-    // Cell 3 → Cell 4.
-    floorButton('b42holdC', 1344, 'door42C'),
-    fullHeightDoor('door42C', 1600),
-    floorButton('b42latchC', 1440, 'door42goal', { latching: true }),
-    floorTrap('t42c', 1760, 96),
-    fireBar('fb42c', 1760, 580, 2, -1.6, 90),
-
-    // Cell 4 → Goal.
-    floorButton('b42holdD', 1952, 'door42D'),
-    fullHeightDoor('door42D', 2208),
-    floorButton('b42latchD', 2048, 'door42goal', { latching: true }),
-
-    // The goal door requires ALL FOUR latches.
-    fullHeightDoor('door42goal', 2528),
-    goalOnFloor('goal42', 2816),
+    lavaWall('wall42', -64, 85),
+    floorTrap('lava42a', 320, 576),
+    crumbleNoRespawn('cnr42a', 320, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42b', 464, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42c', 608, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42d', 752, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42e', 848, FLOOR_TOP - 32, 96),
+    fireBar('fb42a', 1200, FLOOR_TOP - 48, 2, 1.2, 0),
+    floorButton('btn42a', 800,  'door42a', { latching: true }),
+    floorButton('btn42b', 1100, 'door42a', { latching: true }),
+    fullHeightDoor('door42a', 1300),
+    floorButton('btn42ab', 1380, 'door42a', { latching: true }),
+    floorTrap('lava42b', 1600, 576),
+    crumbleNoRespawn('cnr42f', 1600, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42g', 1744, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42h', 1888, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42i', 2032, FLOOR_TOP - 32, 96),
+    crumbleNoRespawn('cnr42j', 2176, FLOOR_TOP - 32, 96),
+    floorButton('btn42stack', highPlat.x + 64, 'door42b', { latching: true }),
+    fireBar('fb42b', 3000, FLOOR_TOP - 48, 3, -1.3, 60),
+    floorButton('btn42c', 3300, 'door42b', { latching: true }),
+    floorButton('btn42d', 3500, 'door42b', { latching: true }),
+    fullHeightDoor('door42b', 3700),
+    floorButton('btn42ex', 3780, 'door42b', { latching: true }),
+    goalOnFloor('goal42', 3920),
   ],
 };
