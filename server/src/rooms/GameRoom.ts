@@ -543,6 +543,42 @@ export class GameRoom extends Room<GameState> {
           }
         }
 
+        // ── Platform side collision — block lateral movement into solid rects ──
+        // Separate pass so landing-on-top resolution (which snaps y first) has
+        // already completed, preventing false lateral triggers when standing on edge.
+        for (const rect of this.solidRects) {
+          if (rect.tileType === 'ground') continue;
+          const rL = rect.x;
+          const rR = rect.x + rect.width;
+          const rT = rect.y;
+          const rB = rect.y + rect.height;
+          const pL2 = player.x - TILE_SIZE / 2;
+          const pR2 = player.x + TILE_SIZE / 2;
+          const pT2 = player.y - TILE_SIZE / 2;
+          const pB2 = player.y + TILE_SIZE / 2;
+
+          // Only apply if player is in the vertical band of the platform
+          // (use a 2 px inset so a player standing exactly on top doesn't trigger)
+          const inVertBand = pB2 > rT + 2 && pT2 < rB - 2;
+          if (!inVertBand) continue;
+
+          const overlapL = pR2 - rL;  // how much player right is inside rect
+          const overlapR = rR - pL2;  // how much rect right is inside player
+
+          if (overlapL <= 0 || overlapR <= 0) continue; // no horizontal overlap
+
+          // Resolve on the smaller horizontal penetration
+          if (overlapL < overlapR) {
+            // Player came from the left: push left
+            player.x = rL - TILE_SIZE / 2;
+            if (player.velocityX > 0) player.velocityX = 0;
+          } else {
+            // Player came from the right: push right
+            player.x = rR + TILE_SIZE / 2;
+            if (player.velocityX < 0) player.velocityX = 0;
+          }
+        }
+
         // Crumbling platforms — behave as one-way solids while intact/shaking.
         // Landing on one transitions to 'shaking' (which after 300ms moves to
         // 'falling' and becomes non-solid).

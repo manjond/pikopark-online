@@ -516,6 +516,10 @@ export function validateLevel(
   for (const [doorId, buttons] of buttonsPerDoor) {
     const allPressure = buttons.every(b => !b.latching);
     if (!allPressure) continue;
+    // Skip solvability check when a pushable box exists in the level:
+    // boxes can hold pressure buttons without consuming a player slot.
+    const hasPushBoxes = level.objects.some(o => o.type === 'box');
+    if (hasPushBoxes) continue;
     const holdersNeeded = buttons.reduce((s, b) => s + b.requiredPlayers, 0);
     if (holdersNeeded >= effectiveMinPlayers) {
       push(
@@ -545,7 +549,34 @@ export function validateLevel(
   const interactable = level.objects.filter(
     o => o.type === 'button' || o.type === 'goal' || o.type === 'spring',
   );
-  // Floor level: button/goal/spring must be at roughly PLAYER_ON_FLOOR y
+  // ── Button physically inside a near-floor platform ───────────────────────
+  // A floorButton whose x-range overlaps a platform that is very close to the
+  // floor (platform top ≥ 624 px ≈ floor – 2 tiles) creates an inaccessible
+  // button: the player's body would overlap the platform trying to stand there.
+  // Elevated platforms (y < 624) don't block floor-level movement.
+  const nearFloorThreshold = FLOOR_TOP - TILE_SIZE * 2;   // 624
+  const floorButtons = level.objects.filter(
+    o => o.type === 'button' && Math.abs(o.y - PLAYER_ON_FLOOR) < TILE_SIZE,
+  );
+  for (const btn of floorButtons) {
+    const bL = btn.x - btn.width  / 2;
+    const bR = btn.x + btn.width  / 2;
+    for (const rect of level.solidRects) {
+      if (rect.tileType === 'ground') continue;
+      if (rect.y < nearFloorThreshold) continue;   // elevated — doesn't block
+      const rL = rect.x;
+      const rR = rect.x + rect.width;
+      if (bR > rL && bL < rR) {
+        push(
+          'error',
+          `button "${btn.id}" (x=${btn.x}) is inside a near-floor platform ` +
+          `(y=${rect.y} x=[${rL}-${rR}]) — inaccessible. Use platformButton instead.`,
+        );
+      }
+    }
+  }
+
+  // ── Floor-level lava overlap ──────────────────────────────────────────────
   // (elevated objects on platforms are safe above floor-level lava).
   const FLOOR_Y_APPROX = FLOOR_TOP - TILE_SIZE / 2; // ~672
   for (const obj of interactable) {

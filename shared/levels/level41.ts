@@ -1,43 +1,28 @@
 import { LevelData } from '../level';
-import {
-  FLOOR_TOP,
-  goalOnFloor, groundSegment, floorButton, fullHeightDoor,
-  standardSpawns, platformRect, pushBox, floorTrap,
-} from './_helpers';
+import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, pushBox, floorTrap } from './_helpers';
 
-// Level 41 — "Box Tower"  (Squad Legion)
-// Four boxes, four latching buttons on elevated platforms.
-// Push each box up the ramp to its button slot.
-
-const btnPlat1 = platformRect(700,  FLOOR_TOP - 48, 96);
-const btnPlat2 = platformRect(1000, FLOOR_TOP - 48, 96);
-const btnPlat3 = platformRect(1300, FLOOR_TOP - 48, 96);
-const btnPlat4 = platformRect(1600, FLOOR_TOP - 48, 96);
-
+// L41 — "Box Tower" (Squad Legion)
+// Four PRESSURE buttons — boxes must stay on them. Traps between box start
+// positions and button slots, forcing careful pushing.
 export const LEVEL_41: LevelData = {
-  id: 41,
-  name: 'Box Tower',
-  minPlayers: 4,
-  mapWidth: 2400,
-  solidRects: [
-    groundSegment(0, 2400),
-    btnPlat1, btnPlat2, btnPlat3, btnPlat4,
-  ],
+  id: 41, name: 'Box Tower', minPlayers: 4, mapWidth: 2400,
+  solidRects: [ groundSegment(0, 2400) ],
   spawnPoints: standardSpawns(),
   objects: [
     pushBox('box41a', 200, FLOOR_TOP - 32),
-    pushBox('box41b', 400, FLOOR_TOP - 32),
-    pushBox('box41c', 600, FLOOR_TOP - 32),
-    pushBox('box41d', 800, FLOOR_TOP - 32),
-    floorTrap('trap41a', 670, 24),
-    floorTrap('trap41b', 970, 24),
-    floorTrap('trap41c', 1270, 24),
-    floorTrap('trap41d', 1570, 24),
-    floorButton('btn41a', btnPlat1.x + 48, 'door41', { latching: true }),
-    floorButton('btn41b', btnPlat2.x + 48, 'door41', { latching: true }),
-    floorButton('btn41c', btnPlat3.x + 48, 'door41', { latching: true }),
-    floorButton('btn41d', btnPlat4.x + 48, 'door41', { latching: true }),
-    fullHeightDoor('door41', 1900),
+    pushBox('box41b', 380, FLOOR_TOP - 32),
+    pushBox('box41c', 560, FLOOR_TOP - 32),
+    pushBox('box41d', 740, FLOOR_TOP - 32),
+    // Lava between box start positions — encourages using correct pushBoxes
+    floorTrap('trap41a', 490, 24),    // between box41a(200) and btn41a(650)
+    floorTrap('trap41b', 750, 24),    // between box41b(380) and btn41b(900)
+    floorTrap('trap41c', 1010, 24),   // between box41c(560) and btn41c(1150)
+    floorTrap('trap41d', 1270, 24),   // between box41d(740) and btn41d(1400)
+    floorButton('btn41a', 650,  'door41', { latching: false }),
+    floorButton('btn41b', 900,  'door41', { latching: false }),
+    floorButton('btn41c', 1150, 'door41', { latching: false }),
+    floorButton('btn41d', 1400, 'door41', { latching: false }),
+    fullHeightDoor('door41', 1700),
     goalOnFloor('goal41', 2340),
   ],
 };
