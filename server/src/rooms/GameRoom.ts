@@ -683,6 +683,8 @@ export class GameRoom extends Room<GameState> {
         for (let j = 0; j < players.length; j++) {
           if (i === j) continue;
           const [, pB] = players[j];
+          // Skip atExit players — they're "inside the door", not in world space
+          if (pA.atExit || pB.atExit) continue;
           const bTop   = pB.y - TILE_SIZE / 2;
           const aLeft  = pA.x - TILE_SIZE / 2;
           const aRight = pA.x + TILE_SIZE / 2;
@@ -926,6 +928,15 @@ export class GameRoom extends Room<GameState> {
             break;
           }
         }
+        // Hardcoded floor snap — same as players so boxes never fall into gaps.
+        // FLOOR_Y (player centre on floor) = GAME_HEIGHT - TILE_SIZE - TILE_SIZE/2 = 672.
+        // Box centre on floor = GAME_HEIGHT - TILE_SIZE - box.height/2.
+        const BOX_FLOOR_Y = GAME_HEIGHT - TILE_SIZE - box.height / 2;
+        if (box.y >= BOX_FLOOR_Y) {
+          box.y = BOX_FLOOR_Y;
+          box.boxVY = 0;
+          grounded = true;
+        }
         if (grounded) {
           box.boxVX *= 0.75;
           if (Math.abs(box.boxVX) < 4) box.boxVX = 0;
@@ -1062,17 +1073,19 @@ export class GameRoom extends Room<GameState> {
         const gTop   = obj.y - obj.height / 2;
         const gBot   = obj.y + obj.height / 2;
         this.state.players.forEach((player) => {
-          // Players already inside always stay inside unless they interact to leave
           if (player.atExit) {
-            const interactEdge = player.isInteracting && !player.prevInteract;
-            if (interactEdge) { player.atExit = false; exitChanged = true; }
+            // Inside: exit on press EDGE only (prevents instant re-entry)
+            if (player.isInteracting && !player.prevInteract) {
+              player.atExit = false;
+              exitChanged = true;
+            }
             return;
           }
-          // Players outside: must be near door and press E to enter
+          // Outside: enter while near AND holding E.
+          // No edge detection — approaching with E already held must work.
           const near = player.x > gLeft && player.x < gRight &&
                        player.y + TILE_SIZE / 2 > gTop && player.y - TILE_SIZE / 2 < gBot;
-          const interactEdge = player.isInteracting && !player.prevInteract;
-          if (near && interactEdge) {
+          if (near && player.isInteracting) {
             player.atExit = true;
             exitChanged = true;
           }
@@ -1294,6 +1307,8 @@ export class GameRoom extends Room<GameState> {
    * velocity pointing *into* the other player is zeroed.
    */
   private resolvePlayerPair(pA: PlayerState, pB: PlayerState): void {
+    // Players inside the exit door are phantoms — they don't block others.
+    if (pA.atExit || pB.atExit) return;
     const overlapX = TILE_SIZE - Math.abs(pA.x - pB.x);
     if (overlapX <= 0) return;
     const overlapY = TILE_SIZE - Math.abs(pA.y - pB.y);
