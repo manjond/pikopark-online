@@ -527,12 +527,7 @@ export function validateLevel(
     }
   }
 
-  // Orphan-door check: doors have no initial `activated` source other than a
-  // button linking to them (server `GameRoom.ts` only reads `button.linkedId`).
-  // A door without any button in its door-vote group stays closed forever
-  // and blocks anything behind it — usually the goal. This caught a bug in
-  // level 25 where `door.linkedId = 'btn25c'` was decorative and no button
-  // actually pointed to the door.
+  // Orphan-door check
   for (const o of level.objects) {
     if (o.type !== 'door') continue;
     if (!buttonsPerDoor.has(o.id)) {
@@ -541,6 +536,41 @@ export function validateLevel(
         `door "${o.id}" has no button linking to it — it stays closed forever. ` +
         `Add a button with linkedId="${o.id}" or remove the door.`,
       );
+    }
+  }
+
+  // ── Spatial safety: buttons/goals/springs must not overlap lava traps ────────
+  // A button sitting on lava is unreachable without dying.
+  const traps = level.objects.filter(o => o.type === 'trap');
+  const interactable = level.objects.filter(
+    o => o.type === 'button' || o.type === 'goal' || o.type === 'spring',
+  );
+  // Floor level: button/goal/spring must be at roughly PLAYER_ON_FLOOR y
+  // (elevated objects on platforms are safe above floor-level lava).
+  const FLOOR_Y_APPROX = FLOOR_TOP - TILE_SIZE / 2; // ~672
+  for (const obj of interactable) {
+    // Only check objects that are at floor level (y within 48 px of PLAYER_ON_FLOOR).
+    // Elevated platform buttons are safely above floor-level lava.
+    if (Math.abs(obj.y - FLOOR_Y_APPROX) > TILE_SIZE * 1.5) continue;
+    const oL = obj.x - obj.width  / 2;
+    const oR = obj.x + obj.width  / 2;
+    for (const trap of traps) {
+      // Skip traps that ARE this button's linked target (lava deactivated when btn held)
+      const linkedToThisBtn = obj.type === 'button' && obj.linkedId === trap.id;
+      // Skip traps linked to a latching button that permanently deactivates them
+      const linkedLatch = level.objects.find(
+        b => b.type === 'button' && b.linkedId === trap.id && b.latching,
+      );
+      if (linkedToThisBtn || linkedLatch) continue;
+      const tL = trap.x - trap.width  / 2;
+      const tR = trap.x + trap.width  / 2;
+      if (oR > tL && oL < tR) {
+        push(
+          'error',
+          `${obj.type} "${obj.id}" (x=${obj.x}) overlaps lava trap "${trap.id}" ` +
+          `(x=${trap.x} w=${trap.width}) — unreachable without dying.`,
+        );
+      }
     }
   }
 

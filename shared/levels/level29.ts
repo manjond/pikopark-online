@@ -1,8 +1,8 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, floorTrap, fireBar, crumbleNoRespawn, lavaWall } from './_helpers';
+import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, floorTrap, fireBar, crumbleNoRespawn, lavaWall } from './_helpers';
 
 // L29 — "Chaos Duo" (Duo Trust)
-// All duo mechanics. TWO doors each with ONE latching button, both left of door.
+// All duo mechanics. Buttons at safe positions, CLEAR of lava traps.
 export const LEVEL_29: LevelData = {
   id: 29, name: 'Chaos Duo', minPlayers: 2, mapWidth: 2800,
   solidRects: [
@@ -17,8 +17,8 @@ export const LEVEL_29: LevelData = {
     crumbleNoRespawn('cnr29c', 608, FLOOR_TOP - 32, 96),
     crumbleNoRespawn('cnr29d', 752, FLOOR_TOP - 32, 96),
     fireBar('fb29a', 1000, FLOOR_TOP - 48, 2, 1.2, 0),
-    floorTrap('lava29b', 1220, 64),
-    floorButton('btn29a', 1250, 'door29a', { latching: true }),
+    floorTrap('lava29b', 1100, 64),          // lava at x=1068-1132 (clear of btn at 1300)
+    floorButton('btn29a', 1350, 'door29a', { latching: true }),   // safe: past lava
     fullHeightDoor('door29a', 1450),
     floorButton('btn29b', 1700, 'door29b', { latching: true }),
     floorButton('btn29c', 2000, 'door29b', { latching: true }),

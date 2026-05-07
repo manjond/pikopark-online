@@ -7,16 +7,16 @@ const f2W = 96;
 const ferry2 = movingPlatform('plat8b', 860, FLOOR_TOP - 96, f2W, { axis: 'x', from: 860+f2W/2, to: 1200+f2W/2, speed: 160 });
 
 // L8 — "Moving Day" (Solo Adept)
-// Two ferries cross lava pits. Mid-island button opens door.
+// Ferries cross lava pits. Button on the safe mid-island, lava starts AFTER the island.
 export const LEVEL_8: LevelData = {
   id: 8, name: 'Moving Day', minPlayers: 1, mapWidth: 1800,
-  solidRects: [ groundSegment(0, 288), groundSegment(800, 64), groundSegment(1300, 500) ],
+  solidRects: [ groundSegment(0, 288), groundSegment(800, 128), groundSegment(1300, 500) ],
   spawnPoints: standardSpawns(),
   objects: [
-    floorTrap('lava8a', 400, 440),
-    floorTrap('lava8b', 900, 400),
+    floorTrap('lava8a', 400, 440),          // first pit: x=180-620
+    floorTrap('lava8b', 1020, 220),         // second pit: x=910-1130 (clear of island x=800-928)
     ferry1, ferry2,
-    floorButton('btn8', 820, 'door8', { latching: true }),
+    floorButton('btn8', 862, 'door8', { latching: true }),   // on safe mid-island
     fullHeightDoor('door8', 1460),
     goalOnFloor('goal8', 1730),
   ],

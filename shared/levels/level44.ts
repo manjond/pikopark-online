@@ -8,7 +8,7 @@ const ferry2 = movingPlatform('plat44b', 1000, FLOOR_TOP - 112, f2W, { axis: 'x'
 const stackPlat = platformRect(2200, STACK2_FEET_PEAK, 128);
 
 // L44 — "Synchronized" (Squad Legion)
-// Moving platforms + fire bars + boxes + stacking. All buttons left of doors.
+// Moving platforms + fire bars + boxes + stacking. Button btn44a moved OUTSIDE lava zone.
 export const LEVEL_44: LevelData = {
   id: 44, name: 'Synchronized', minPlayers: 4, mapWidth: 3200,
   solidRects: [
@@ -18,9 +18,9 @@ export const LEVEL_44: LevelData = {
   spawnPoints: standardSpawns(),
   objects: [
     floorTrap('lava44a', 400, 500),
-    floorTrap('lava44b', 1030, 470),
+    floorTrap('lava44b', 1360, 280),          // covers x=1220-1500 (btn44a moved to 820 - safe)
     ferry1, ferry2,
-    floorButton('btn44a', 960, 'door44a', { latching: true }),
+    floorButton('btn44a', 820, 'door44a', { latching: true }),    // safe: on ground x=800-928
     fullHeightDoor('door44a', 1200),
     fireBar('fb44a', 1800, FLOOR_TOP - 48, 2, 1.2, 0),
     pushBox('box44a', 1700, FLOOR_TOP - 32),

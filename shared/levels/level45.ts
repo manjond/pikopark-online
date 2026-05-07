@@ -7,7 +7,7 @@ const highPlat   = platformRect(3400, STACK3_FEET_PEAK, 128);
 const springPlat = platformRect(4200, 200, 128);
 
 // L45 — "Final Legion" (Squad Legion)
-// All mechanics, 5120 px, wall 80 px/s. Every button left of its door.
+// All mechanics, 5120 px, wall 80 px/s. btn45a moved to safe position OUTSIDE lava45b.
 export const LEVEL_45: LevelData = {
   id: 45, name: 'Final Legion', minPlayers: 4, mapWidth: 5120,
   solidRects: [
@@ -27,10 +27,10 @@ export const LEVEL_45: LevelData = {
     crumbleNoRespawn('cnr45f', 960,  FLOOR_TOP - 32, 80),
     crumbleNoRespawn('cnr45g', 1088, FLOOR_TOP - 32, 80),
     crumbleNoRespawn('cnr45h', 1168, FLOOR_TOP - 32, 80),
-    floorTrap('lava45b', 1700, 600),
+    floorTrap('lava45b', 1875, 350),           // covers x=1700-2050; btn45a moved BEFORE this
     fireBar('fb45a', 1400, FLOOR_TOP - 48, 2, 1.1, 0),
     ferry,
-    floorButton('btn45a', 1890, 'door45a', { latching: true }),
+    floorButton('btn45a', 1340, 'door45a', { latching: true }),   // x=1340, safe before lava45b
     fullHeightDoor('door45a', 2100),
     floorTrap('lava45c', 2380, 64),
     pushBox('box45a', 2200, FLOOR_TOP - 32),
