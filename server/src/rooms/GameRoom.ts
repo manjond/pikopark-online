@@ -736,9 +736,10 @@ export class GameRoom extends Room<GameState> {
         const pRight = player.x + TILE_SIZE / 2;
         const pFeet  = player.y + TILE_SIZE / 2; // bottom of player
 
-        // Must be grounded, horizontally overlapping, AND standing at the button's level
-        const onButtonLevel = Math.abs(pFeet - btnTop) < TILE_SIZE * 0.75;
-        if (player.isGrounded && onButtonLevel && pRight > bLeft && pLeft < bRight) {
+        // Wider tolerance (full TILE_SIZE) and no isGrounded requirement
+        // so the button fires even if the player briefly leaves the floor.
+        const onButtonLevel = Math.abs(pFeet - btnTop) < TILE_SIZE;
+        if (onButtonLevel && pRight > bLeft && pLeft < bRight) {
           count++;
         }
       });
@@ -748,7 +749,6 @@ export class GameRoom extends Room<GameState> {
     });
 
     // ── Propagate button → linked door (AND logic: ALL buttons must activate) ──
-    // Multiple buttons can share one door — all must be active to open it.
     const doorVotes = new Map<string, { total: number; active: number }>();
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type !== 'button' || !obj.linkedId) return;

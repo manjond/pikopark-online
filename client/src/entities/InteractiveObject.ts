@@ -86,26 +86,30 @@ export class InteractiveObject {
       const padColor  = this.isLatchButton ? BTN_LATCH_OFF  : BTN_PRESSURE_OFF;
       const bodyColor = this.isLatchButton ? 0x223355       : 0x553300;
 
-      // Invisible placeholder to keep `readonly rect` satisfied; body + pad are the actual visuals
+      // Invisible placeholder (physics rect kept for API compatibility)
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, 0, 0);
 
-      // Body — the dark "housing" that stays fixed (depth effect)
-      const bodyH = data.height + 6;
-      this.buttonBody = scene.add.rectangle(data.x, data.y + 3, data.width, bodyH, bodyColor);
+      // Anchor button visuals to the BOTTOM of the data rect so the button
+      // sits flush on the floor surface regardless of the data center y.
+      const floorY = data.y + data.height / 2; // bottom edge of the button hitbox
+      const BODY_H = 12;
+      const PAD_H  = 6;
+      const bodyCY = floorY - BODY_H / 2;        // body sits on the floor
+      const PAD_UP_Y = bodyCY - BODY_H / 2 - 1;  // pad raised: just above body top
+
+      // Body — the dark "housing" embedded in the floor
+      this.buttonBody = scene.add.rectangle(data.x, bodyCY, data.width, BODY_H, bodyColor);
       this.buttonBody.setDepth(2);
 
-      // Pad — the coloured top surface that depresses
-      const PAD_H = 5;
-      const PAD_RAISED_Y = data.y - 3;  // up position
-      this.buttonPad = scene.add.rectangle(data.x, PAD_RAISED_Y, data.width - 4, PAD_H, padColor);
+      // Pad — the coloured top surface that physically depresses on activation
+      this.buttonPad = scene.add.rectangle(data.x, PAD_UP_Y, data.width - 4, PAD_H, padColor);
+      this.buttonPad.setStrokeStyle(1, 0xffffff, 0.3);
       this.buttonPad.setDepth(3);
-      // Highlight on pad top edge
-      scene.add.rectangle(data.x, PAD_RAISED_Y - 1, data.width - 6, 1, 0xffffff, 0.35).setDepth(4);
 
-      // Label above the button: arrow type indicator
-      const labelStr  = this.isLatchButton ? 'LOCK' : 'HOLD';
+      // Label above button (LOCK vs HOLD)
+      const labelStr   = this.isLatchButton ? 'LOCK' : 'HOLD';
       const labelColor = this.isLatchButton ? '#88aaff' : '#ffaa44';
-      scene.add.text(data.x, data.y - data.height / 2 - 10, labelStr, {
+      scene.add.text(data.x, PAD_UP_Y - PAD_H / 2 - 4, labelStr, {
         fontSize: '5px', color: labelColor, fontFamily: '"Press Start 2P"',
       }).setOrigin(0.5, 1).setDepth(4);
 
@@ -328,33 +332,27 @@ export class InteractiveObject {
 
   private prevActivated = false;
 
+  /** Pad resting Y — stored at construction so sync animations reference it correctly. */
+  private buttonPadRestY = 0;
+
   sync(data: Pick<NetworkObject, 'activated'>): void {
     if (this.type === 'button' && this.buttonPad) {
       const pad = this.buttonPad;
-      const PAD_RAISED_Y   = pad.y;           // current up position stored at creation
-      const PAD_PRESSED_Y  = PAD_RAISED_Y + 6; // how far down it sinks
+      // Use stored rest position, not pad.y which may have been tweened already
+      if (this.buttonPadRestY === 0) this.buttonPadRestY = pad.y;
+      const PAD_RAISED_Y  = this.buttonPadRestY;
+      const PAD_PRESSED_Y = PAD_RAISED_Y + 7;  // sinks into the body
 
       if (data.activated && !this.prevActivated) {
         playButtonPress();
-        // Press down: animate pad sinking
         this.scene.tweens.killTweensOf(pad);
-        this.scene.tweens.add({
-          targets: pad,
-          y: PAD_PRESSED_Y,
-          duration: 60,
-          ease: 'Sine.easeIn',
-        });
+        this.scene.tweens.add({ targets: pad, y: PAD_PRESSED_Y, duration: 60, ease: 'Sine.easeIn' });
         pad.setFillStyle(BTN_PRESSURE_ON);
         this.buttonBody?.setFillStyle(this.isLatchButton ? 0x114422 : 0x224400);
       } else if (!data.activated && this.prevActivated && !this.isLatchButton) {
-        // Spring back (pressure only — latch stays down)
+        // Pressure button springs back
         this.scene.tweens.killTweensOf(pad);
-        this.scene.tweens.add({
-          targets: pad,
-          y: PAD_RAISED_Y,
-          duration: 120,
-          ease: 'Back.easeOut',
-        });
+        this.scene.tweens.add({ targets: pad, y: PAD_RAISED_Y, duration: 120, ease: 'Back.easeOut' });
         pad.setFillStyle(BTN_PRESSURE_OFF);
         this.buttonBody?.setFillStyle(0x553300);
       }
