@@ -40,6 +40,8 @@ export class InteractiveObject {
   private goalStar: Phaser.GameObjects.Sprite | null = null;   // repurposed: door glow
   private goalGlow: Phaser.GameObjects.Arc | null = null;
   private goalCountText: Phaser.GameObjects.Text | null = null;
+  /** Small colored squares shown on the door for each player inside. */
+  private goalPlayerDots: Phaser.GameObjects.Rectangle[] = [];
 
   /** Lava wall visual components */
   private lavaWallStrips: Phaser.GameObjects.Rectangle[] = [];
@@ -412,6 +414,24 @@ export class InteractiveObject {
     if (this.goalGlow) this.goalGlow.setFillStyle(allIn ? EXIT_DOOR_DONE : EXIT_DOOR_OPEN, 0.15);
   }
 
+  /** Show colored player dots stacked inside the exit door. */
+  setInsideColors(colors: number[]): void {
+    if (this.type !== 'goal') return;
+    // Destroy old dots
+    this.goalPlayerDots.forEach((d) => d.destroy());
+    this.goalPlayerDots = [];
+    // Draw one 8×8 dot per player inside, stacked vertically
+    const DOT = 8;
+    const startY = this.rect.y - (colors.length - 1) * (DOT + 2) / 2;
+    colors.forEach((color, i) => {
+      const dot = this.scene.add.rectangle(
+        this.rect.x, startY + i * (DOT + 2), DOT, DOT, color,
+      );
+      dot.setDepth(7);
+      this.goalPlayerDots.push(dot);
+    });
+  }
+
   /** Rotate fire-bar segments to the given pivot angle (radians). */
   setFireBarAngle(angle: number): void {
     if (this.type !== 'firebar') return;
@@ -491,6 +511,8 @@ export class InteractiveObject {
     if (this.goalGlow)       { this.scene.tweens.killTweensOf(this.goalGlow);       this.goalGlow.destroy(); }
     if (this.goalLabel)      { this.scene.tweens.killTweensOf(this.goalLabel);      this.goalLabel.destroy(); }
     if (this.goalCountText)  { this.goalCountText.destroy(); }
+    this.goalPlayerDots.forEach((d) => d.destroy());
+    this.goalPlayerDots = [];
     if (this.springArrow)    { this.scene.tweens.killTweensOf(this.springArrow);    this.springArrow.destroy(); }
     if (this.lavaTopStrip)   { this.scene.tweens.killTweensOf(this.lavaTopStrip);   this.lavaTopStrip.destroy(); }
     this.lavaBubbles.forEach((b) => { this.scene.tweens.killTweensOf(b); b.destroy(); });

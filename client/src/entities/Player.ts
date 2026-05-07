@@ -153,6 +153,17 @@ export class Player {
     }
   }
 
+  /** Return the numeric color for this player (used by exit-door indicator). */
+  getColor(): number {
+    return PLAYER_COLORS[this.colorIndex] ?? 0xffffff;
+  }
+
+  /** Hide or show the player sprite and name tag. */
+  setVisible(visible: boolean): void {
+    this.sprite.setVisible(visible);
+    this.nameLabel.setVisible(visible);
+  }
+
   destroy(): void {
     this.sprite.destroy();
     this.nameLabel.destroy();

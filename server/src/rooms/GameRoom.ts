@@ -175,6 +175,16 @@ export class GameRoom extends Room<GameState> {
       this.broadcastPackInfo();
     });
 
+    // Any active player can request a level restart (useful when boxes get stuck).
+    // Restart resets boxes and player positions without counting as a death timer.
+    this.onMessage('requestRestart', (client) => {
+      if (!this.gameStarted || this.levelCompleted || this.trapRestartPending) return;
+      const isPlayer = this.state.players.has(client.sessionId);
+      if (!isPlayer) return;
+      this.broadcast('trapHit', {});
+      this.clock.setTimeout(() => { this.loadLevel(this.currentLevelIndex, true); }, 400);
+    });
+
     this.onMessage<{ text: string }>('chat', (client, data) => {
       const player = this.state.players.get(client.sessionId);
       const spectator = this.spectators.get(client.sessionId);
@@ -454,10 +464,10 @@ export class GameRoom extends Room<GameState> {
       }
     });
 
-    // ── Process pickup/throw requests (edge-triggered on interact press) ──────
-    this.processCarryInputs();
+    // Carry mechanic disabled — E key is reserved for exit-door only.
+    // this.processCarryInputs();
 
-    // ── Pin carried players to their carrier's head before integration ────────
+    // ── Pin carried players (disabled, kept for state safety) ──────────────────
     this.state.players.forEach((player) => {
       if (!player.carriedBy) return;
       const carrier = this.state.players.get(player.carriedBy);
@@ -901,22 +911,62 @@ export class GameRoom extends Room<GameState> {
           if (Math.abs(box.boxVX) < 4) box.boxVX = 0;
         }
 
-        // Players push box by walking into it
+        const boxTop = box.y - box.height / 2;
+
+        // ── Player can land on top of box (one-way solid) ─────────────────────
         this.state.players.forEach((player) => {
-          if (player.carriedBy) return;
+          if (player.atExit) return;
+          const prevPy = player.y - player.velocityY * subDtBox; // approx previous y
+          const prevPB = prevPy + TILE_SIZE / 2;
+          const currPB = player.y + TILE_SIZE / 2;
+          const pL2 = player.x - TILE_SIZE / 2;
+          const pR2 = player.x + TILE_SIZE / 2;
+          if (pR2 > bL && pL2 < bR && player.velocityY >= 0
+              && currPB >= boxTop && prevPB <= boxTop + TILE_SIZE * 0.5) {
+            player.y = boxTop - TILE_SIZE / 2;
+            player.velocityY = 0;
+            player.isGrounded = true;
+          }
+        });
+
+        // ── Players push box sideways — correct hitbox (body-level only) ──────
+        this.state.players.forEach((player) => {
+          if (player.atExit) return;
           const pL = player.x - TILE_SIZE / 2;
           const pR = player.x + TILE_SIZE / 2;
           const pT = player.y - TILE_SIZE / 2;
-          const pBotBox = box.y + box.height / 2;
-          const bTop    = box.y - box.height / 2;
-          const vertOk  = pBotBox > pT + 4 && player.y - TILE_SIZE / 2 < pBotBox - 4;
-          if (!vertOk) return;
+          const pB = player.y + TILE_SIZE / 2;
+          // Only push when player body overlaps box body vertically
+          // (not when jumping over — 2px inset avoids triggering while on top)
+          const vertOverlap = pB > boxTop + 2 && pT < bB - 2;
+          if (!vertOverlap) return;
           if (player.velocityX > 0 && pR > bL && pL < bL + 10) {
             box.boxVX = BOX_PUSH_SPEED;
             box.x = player.x + TILE_SIZE / 2 + box.width / 2 + 1;
           } else if (player.velocityX < 0 && pL < bR && pR > bR - 10) {
             box.boxVX = -BOX_PUSH_SPEED;
             box.x = player.x - TILE_SIZE / 2 - box.width / 2 - 1;
+          }
+        });
+
+        // ── Box-box collision — prevent overlap between crates ────────────────
+        this.state.interactiveObjects.forEach((other) => {
+          if (other === box || other.type !== 'box') return;
+          const oL = other.x - other.width  / 2;
+          const oR = other.x + other.width  / 2;
+          const oT = other.y - other.height / 2;
+          const oB = other.y + other.height / 2;
+          const overlapH = bR > oL && bL < oR;
+          const overlapV = bB > oT + 2 && boxTop < oB - 2;
+          if (!overlapH || !overlapV) return;
+          const pushL = bR - oL;
+          const pushR = oR - bL;
+          if (pushL < pushR) {
+            box.x = oL - box.width / 2;
+            if (box.boxVX > 0) box.boxVX = 0;
+          } else {
+            box.x = oR + box.width / 2;
+            if (box.boxVX < 0) box.boxVX = 0;
           }
         });
       }
@@ -939,25 +989,44 @@ export class GameRoom extends Room<GameState> {
       });
     });
 
+    // ── Freeze players who are inside the exit door ────────────────────────────
+    // Pin them at the goal position and zero velocity so they're "inside".
+    this.state.interactiveObjects.forEach((obj) => {
+      if (obj.type !== 'goal') return;
+      this.state.players.forEach((player) => {
+        if (!player.atExit) return;
+        player.x = obj.x;
+        player.y = obj.y;
+        player.velocityX = 0;
+        player.velocityY = 0;
+        player.isGrounded = true;
+        player.animation = 'idle';
+      });
+    });
+
     // ── Exit door — interact near goal to enter/exit; all in = level complete ──
     if (!this.levelCompleted) {
       let exitChanged = false;
       this.state.interactiveObjects.forEach((obj) => {
         if (obj.type !== 'goal') return;
-        const proximity = TILE_SIZE * 2;
+        const proximity = TILE_SIZE * 3;
         const gLeft  = obj.x - obj.width  / 2 - proximity;
         const gRight = obj.x + obj.width  / 2 + proximity;
         const gTop   = obj.y - obj.height / 2;
         const gBot   = obj.y + obj.height / 2;
         this.state.players.forEach((player) => {
+          // Players already inside always stay inside unless they interact to leave
+          if (player.atExit) {
+            const interactEdge = player.isInteracting && !player.prevInteract;
+            if (interactEdge) { player.atExit = false; exitChanged = true; }
+            return;
+          }
+          // Players outside: must be near door and press E to enter
           const near = player.x > gLeft && player.x < gRight &&
                        player.y + TILE_SIZE / 2 > gTop && player.y - TILE_SIZE / 2 < gBot;
           const interactEdge = player.isInteracting && !player.prevInteract;
           if (near && interactEdge) {
-            player.atExit = !player.atExit;
-            exitChanged = true;
-          } else if (!near && player.atExit) {
-            player.atExit = false;
+            player.atExit = true;
             exitChanged = true;
           }
         });

@@ -64,6 +64,8 @@ export class GameScene extends Phaser.Scene {
   private doorPrevActivated = new Map<string, boolean>();
   /** Position of the current level's goal (used for the level-complete burst). */
   private goalPosition: { x: number; y: number } | null = null;
+  /** Which player IDs are currently inside the exit door. */
+  private atExitSet = new Set<string>();
 
   // ── Background (parallax) ──────────────────────────────────────────────────
   private parallaxFar!: Phaser.GameObjects.TileSprite;
@@ -194,6 +196,11 @@ export class GameScene extends Phaser.Scene {
 
     // Esc also exits — important when a map glitches into unreachable state.
     this.input.keyboard!.on('keydown-ESC', onExit);
+
+    // R key restarts the current level (useful when boxes get stuck)
+    this.input.keyboard!.on('keydown-R', () => {
+      if (this.room) this.room.send('requestRestart', {});
+    });
 
     // UIScene.create() runs on the next frame, so defer the HUD update by a
     // tick so the target text field exists.
@@ -486,12 +493,29 @@ export class GameScene extends Phaser.Scene {
       }
     });
 
-    // ── Exit door states — update player count display on the goal door ────
+    // ── Exit door states — hide players inside + update door display ──────────
     this.onRoomMessage<Array<{ id: string; atExit: boolean }>>(room, 'exitStates', (list) => {
       const inside = list.filter((e) => e.atExit).length;
       const total  = list.length;
+      this.atExitSet.clear();
+      for (const e of list) {
+        if (e.atExit) this.atExitSet.add(e.id);
+      }
+      // Hide players that entered the door, show the rest
+      this.players.forEach((sprite, id) => {
+        sprite.setVisible(!this.atExitSet.has(id));
+      });
+      // Collect colors of players inside for the door display
+      const insideColors: number[] = [];
+      for (const id of this.atExitSet) {
+        const sprite = this.players.get(id);
+        if (sprite) insideColors.push(sprite.getColor());
+      }
       this.interactiveObjects.forEach((obj) => {
-        if (obj.type === 'goal') obj.setExitCount(inside, total);
+        if (obj.type === 'goal') {
+          obj.setExitCount(inside, total);
+          obj.setInsideColors(insideColors);
+        }
       });
     });
 
@@ -548,6 +572,9 @@ export class GameScene extends Phaser.Scene {
     this.doorGroup.clear(true, true);
     this.doorPrevActivated.clear();
     this.goalPosition = null;
+    // Reset exit state — everyone becomes visible again on level load
+    this.atExitSet.clear();
+    this.players.forEach((sprite) => sprite.setVisible(true));
 
     for (const def of objects) {
       const iObj = new InteractiveObject(
