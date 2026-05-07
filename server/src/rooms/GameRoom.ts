@@ -794,6 +794,26 @@ export class GameRoom extends Room<GameState> {
       if (count >= needed) obj.activated = true;
     });
 
+    // ── Box-button activation (BEFORE door propagation so boxes can open doors) ─
+    // Pressure buttons reset to false at tick start. Player check above may have
+    // set some to true. Boxes now also set buttons true if resting on them.
+    // Running this BEFORE door propagation ensures both sources are counted.
+    this.state.interactiveObjects.forEach((btn) => {
+      if (btn.type !== 'button' || (btn.latching && btn.activated)) return;
+      const bbL   = btn.x - btn.width  / 2;
+      const bbR   = btn.x + btn.width  / 2;
+      const bbTop = btn.y - btn.height / 2;
+      this.state.interactiveObjects.forEach((box) => {
+        if (box.type !== 'box') return;
+        const boxL = box.x - box.width  / 2;
+        const boxR = box.x + box.width  / 2;
+        const boxB = box.y + box.height / 2;
+        if (boxR > bbL && boxL < bbR && Math.abs(boxB - bbTop) < TILE_SIZE * 0.75 && box.boxVY === 0) {
+          btn.activated = true;
+        }
+      });
+    });
+
     // ── Propagate button → linked door (AND logic: ALL buttons must activate) ──
     const doorVotes = new Map<string, { total: number; active: number }>();
     this.state.interactiveObjects.forEach((obj) => {
@@ -949,7 +969,7 @@ export class GameRoom extends Room<GameState> {
           }
         });
 
-        // ── Box-box collision — prevent overlap between crates ────────────────
+        // ── Box-box collision ─────────────────────────────────────────────────
         this.state.interactiveObjects.forEach((other) => {
           if (other === box || other.type !== 'box') return;
           const oL = other.x - other.width  / 2;
@@ -969,24 +989,51 @@ export class GameRoom extends Room<GameState> {
             if (box.boxVX < 0) box.boxVX = 0;
           }
         });
-      }
-    });
 
-    // ── Box-button activation — boxes resting on buttons count as weight ──────
-    this.state.interactiveObjects.forEach((btn) => {
-      if (btn.type !== 'button' || (btn.latching && btn.activated)) return;
-      const bL   = btn.x - btn.width  / 2;
-      const bR   = btn.x + btn.width  / 2;
-      const bTop = btn.y - btn.height / 2;
-      this.state.interactiveObjects.forEach((box) => {
-        if (box.type !== 'box') return;
-        const boxL = box.x - box.width  / 2;
-        const boxR = box.x + box.width  / 2;
-        const boxB = box.y + box.height / 2;
-        if (boxR > bL && boxL < bR && Math.abs(boxB - bTop) < TILE_SIZE * 0.75 && box.boxVY === 0) {
-          btn.activated = true;
-        }
-      });
+        // ── Box-door collision — closed doors block boxes ─────────────────────
+        this.state.interactiveObjects.forEach((door) => {
+          if (door.type !== 'door' || door.activated) return;
+          const dL = door.x - door.width  / 2;
+          const dR = door.x + door.width  / 2;
+          const dT = door.y - door.height / 2;
+          const dB = door.y + door.height / 2;
+          if (!(bR > dL && bL < dR && bB > dT && boxTop < dB)) return;
+          const pushL = bR - dL;
+          const pushR = dR - bL;
+          if (pushL < pushR) {
+            box.x = dL - box.width / 2;
+            if (box.boxVX > 0) box.boxVX = 0;
+          } else {
+            box.x = dR + box.width / 2;
+            if (box.boxVX < 0) box.boxVX = 0;
+          }
+        });
+
+        // ── Box pushes players out of the way ─────────────────────────────────
+        this.state.players.forEach((player) => {
+          if (player.atExit) return;
+          const pL = player.x - TILE_SIZE / 2;
+          const pR = player.x + TILE_SIZE / 2;
+          const pT = player.y - TILE_SIZE / 2;
+          const pB = player.y + TILE_SIZE / 2;
+          // Only when bodies vertically overlap (same level as box)
+          if (!(pB > boxTop + 2 && pT < bB - 2)) return;
+          const overlapL = bR - pL;  // box right vs player left
+          const overlapR = pR - bL;  // player right vs box left
+          if (overlapL <= 0 || overlapR <= 0) return;
+          if (overlapL < overlapR) {
+            // Box is to the right of player — push player left
+            player.x = bL - TILE_SIZE / 2;
+            if (player.velocityX > 0) player.velocityX = 0;
+          } else {
+            // Box is to the left of player — push player right
+            player.x = bR + TILE_SIZE / 2;
+            if (player.velocityX < 0) player.velocityX = 0;
+          }
+          // Clamp player x to map bounds
+          player.x = Math.max(TILE_SIZE / 2, Math.min(this.mapWidth - TILE_SIZE / 2, player.x));
+        });
+      }
     });
 
     // ── Freeze players who are inside the exit door ────────────────────────────
