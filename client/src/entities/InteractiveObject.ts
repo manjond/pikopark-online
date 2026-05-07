@@ -44,7 +44,8 @@ export class InteractiveObject {
   /** Lava wall visual components */
   private lavaWallStrips: Phaser.GameObjects.Rectangle[] = [];
 
-  /** Pushable box component (none extra — uses this.rect) */
+  /** Pushable box cross-brace graphic (moves with the box). */
+  private boxGraphics: Phaser.GameObjects.Graphics | null = null;
 
   /** Button type flag: needed for correct sync color logic */
   private isLatchButton = false;
@@ -298,20 +299,21 @@ export class InteractiveObject {
       }
 
     } else if (data.type === 'box') {
-      // Wooden crate — visible rect with a simple cross-brace look
+      // Wooden crate — visible rect with cross-brace that moves with it
       this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, BOX_FILL);
       this.rect.setStrokeStyle(3, BOX_STROKE);
       this.rect.setDepth(3);
-      // Cross-brace markings (diagonal lines drawn via a tiny Graphics object)
+      // Cross-brace: draw lines RELATIVE to graphic origin, then position graphic at box center.
+      // When setBoxPosition is called, we move both rect and boxGraphics together.
       const g = scene.add.graphics();
       g.lineStyle(1.5, BOX_STROKE, 0.7);
-      const x1 = data.x - data.width / 2;
-      const y1 = data.y - data.height / 2;
-      const x2 = data.x + data.width / 2;
-      const y2 = data.y + data.height / 2;
-      g.strokeLineShape(new Phaser.Geom.Line(x1, y1, x2, y2));
-      g.strokeLineShape(new Phaser.Geom.Line(x2, y1, x1, y2));
+      const hw = data.width  / 2;
+      const hh = data.height / 2;
+      g.strokeLineShape(new Phaser.Geom.Line(-hw, -hh,  hw,  hh));
+      g.strokeLineShape(new Phaser.Geom.Line( hw, -hh, -hw,  hh));
+      g.setPosition(data.x, data.y);
       g.setDepth(4);
+      this.boxGraphics = g;
 
     } else {
       // Door — full-height barrier
@@ -391,6 +393,10 @@ export class InteractiveObject {
     if (this.type !== 'box') return;
     this.rect.x = x;
     this.rect.y = y;
+    if (this.boxGraphics) {
+      this.boxGraphics.x = x;
+      this.boxGraphics.y = y;
+    }
   }
 
   /**
@@ -490,6 +496,7 @@ export class InteractiveObject {
     this.lavaBubbles.forEach((b) => { this.scene.tweens.killTweensOf(b); b.destroy(); });
     this.lavaWallStrips.forEach((s) => { this.scene.tweens.killTweensOf(s); s.destroy(); });
     this.lavaWallStrips = [];
+    if (this.boxGraphics) { this.boxGraphics.destroy(); this.boxGraphics = null; }
 
     if (this.fireBarPivot) { this.fireBarPivot.destroy(); this.fireBarPivot = null; }
     this.fireBarSegments.forEach((s) => { this.scene.tweens.killTweensOf(s); s.destroy(); });
