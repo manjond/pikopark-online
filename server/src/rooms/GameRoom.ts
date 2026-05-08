@@ -523,7 +523,6 @@ export class GameRoom extends Room<GameState> {
         const prevHead = py  - TILE_SIZE / 2;
 
         for (const rect of this.solidRects) {
-          if (rect.tileType === 'ground') continue;
           const horizOverlap = pRight > rect.x && pLeft < rect.x + rect.width;
           if (!horizOverlap) continue;
 
@@ -553,11 +552,10 @@ export class GameRoom extends Room<GameState> {
           }
         }
 
-        // ── Platform side collision — block lateral movement into solid rects ──
+        // ── Solid side collision — block lateral movement into solid rects ──
         // Separate pass so landing-on-top resolution (which snaps y first) has
         // already completed, preventing false lateral triggers when standing on edge.
         for (const rect of this.solidRects) {
-          if (rect.tileType === 'ground') continue;
           const rL = rect.x;
           const rR = rect.x + rect.width;
           const rT = rect.y;
@@ -642,14 +640,6 @@ export class GameRoom extends Room<GameState> {
             player.y += plat.platformVY * subDt;
           }
         });
-
-        // Ground (always resolves)
-        if (player.y >= FLOOR_Y) {
-          player.y = FLOOR_Y;
-          player.velocityY = 0;
-          player.isGrounded = true;
-          player.onIce = false;
-        }
 
         // Door collision (solid AABB when closed)
         this.state.interactiveObjects.forEach((obj) => {
@@ -927,15 +917,6 @@ export class GameRoom extends Room<GameState> {
             grounded = true;
             break;
           }
-        }
-        // Hardcoded floor snap — same as players so boxes never fall into gaps.
-        // FLOOR_Y (player centre on floor) = GAME_HEIGHT - TILE_SIZE - TILE_SIZE/2 = 672.
-        // Box centre on floor = GAME_HEIGHT - TILE_SIZE - box.height/2.
-        const BOX_FLOOR_Y = GAME_HEIGHT - TILE_SIZE - box.height / 2;
-        if (box.y >= BOX_FLOOR_Y) {
-          box.y = BOX_FLOOR_Y;
-          box.boxVY = 0;
-          grounded = true;
         }
         if (grounded) {
           box.boxVX *= 0.75;
