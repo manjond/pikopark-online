@@ -30,7 +30,7 @@ export interface NetworkPlayer {
 /** One entry in state.interactiveObjects — matches server ObjectState schema fields. */
 export interface NetworkObject {
   readonly id: string;
-  readonly type: string;   // 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform' | 'firebar' | 'crumble'
+  readonly type: string;
   readonly x: number;
   readonly y: number;
   readonly width: number;
@@ -40,6 +40,8 @@ export interface NetworkObject {
   readonly linkedId: string;
   readonly latching: boolean;
   readonly segments?: number;
+  readonly speed?: number;
+  readonly power?: number;
 }
 
 /** Top-level game state received from the server. */

@@ -3,7 +3,7 @@ import { PlayerState } from './Player';
 
 export class ObjectState extends Schema {
   @type('string') id: string = '';
-  /** 'button' | 'door' | 'goal' | 'trap' | 'spring' | 'platform' */
+  /** Interactive object type from shared LevelObjectDef. */
   @type('string') type: string = 'button';
   @type('number') x: number = 0;
   @type('number') y: number = 0;
@@ -56,6 +56,8 @@ export class ObjectState extends Schema {
   lavaWallSpeed: number = 0;
   /** Current X position of the lava wall's right edge. */
   lavaWallX: number = 0;
+  /** Generic object speed, currently used by vines as launch velocity. */
+  speed: number = 0;
 
   // ── Pushable box (server-only) ────────────────────────────────────────────
   boxVX: number = 0;

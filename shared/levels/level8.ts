@@ -12,7 +12,7 @@ import {
   standardSpawns,
 } from './_helpers';
 
-const boostKey = platformRect(640, FLOOR_TOP - 292, 160);
+const boostKey = platformRect(640, FLOOR_TOP - 276, 160);
 
 export const LEVEL_8: LevelData = {
   id: 8,

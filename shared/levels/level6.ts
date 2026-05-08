@@ -9,7 +9,7 @@ import {
   standardSpawns,
 } from './_helpers';
 
-const shoulderKey = platformRect(620, FLOOR_TOP - 292, 144);
+const shoulderKey = platformRect(620, FLOOR_TOP - 276, 144);
 
 export const LEVEL_6: LevelData = {
   id: 6,

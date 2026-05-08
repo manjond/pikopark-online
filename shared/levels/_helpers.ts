@@ -301,6 +301,46 @@ export function lavaWall(
   };
 }
 
+export function vine(
+  id: string,
+  x: number,
+  y: number,
+  height: number = 160,
+  speed: number = 560,
+  power: number = -720,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'vine',
+    x,
+    y,
+    width: 48,
+    height,
+    requiredPlayers: 0,
+    linkedId: '',
+    speed,
+    power,
+  };
+}
+
+export function spikeTrap(
+  id: string,
+  x: number,
+  yTop: number = FLOOR_TOP - 16,
+  width: number = 96,
+): LevelObjectDef {
+  return {
+    id,
+    type: 'spike',
+    x,
+    y: yTop + 8,
+    width,
+    height: 16,
+    requiredPlayers: 0,
+    linkedId: '',
+  };
+}
+
 export function pushBox(
   id: string,
   x: number,
@@ -471,6 +511,35 @@ function canSpringTo(spring: LevelObjectDef, target: Surface, from: Surface): bo
   return gap <= 430 + dropBonus;
 }
 
+function canReachVine(from: Surface, vineObj: LevelObjectDef, players: number): boolean {
+  const vineBottom = vineObj.y + vineObj.height / 2;
+  const rise = from.y - vineBottom;
+  if (rise > assistedJumpRise(players) - REACH_MARGIN) return false;
+  const gap =
+    vineObj.x < from.x1 ? from.x1 - vineObj.x :
+    vineObj.x > from.x2 ? vineObj.x - from.x2 :
+    0;
+  return gap <= 300;
+}
+
+function canVineTo(vineObj: LevelObjectDef, target: Surface): boolean {
+  const dir = (vineObj.speed ?? 560) < 0 ? -1 : 1;
+  if (dir > 0 && target.x2 < vineObj.x) return false;
+  if (dir < 0 && target.x1 > vineObj.x) return false;
+
+  const launchRise = Math.abs(vineObj.power ?? -720);
+  const rise = vineObj.y - target.y;
+  if (rise > (launchRise * launchRise) / (2 * GRAVITY) + TILE_SIZE - REACH_MARGIN) {
+    return false;
+  }
+
+  const gap =
+    dir > 0
+      ? Math.max(0, target.x1 - vineObj.x)
+      : Math.max(0, vineObj.x - target.x2);
+  return gap <= Math.abs(vineObj.speed ?? 560) * 0.9;
+}
+
 function reachableSurfaceIds(
   level: LevelData,
   surfaces: Surface[],
@@ -493,6 +562,7 @@ function reachableSurfaceIds(
     .filter(o => o.type === 'spring')
     .map(o => ({ obj: o, surface: findSurfaceForObject(surfaces, o) }))
     .filter((entry): entry is { obj: LevelObjectDef; surface: Surface } => entry.surface !== null);
+  const vines = level.objects.filter(o => o.type === 'vine');
 
   while (queue.length > 0) {
     const current = queue.shift()!;
@@ -509,6 +579,16 @@ function reachableSurfaceIds(
       for (const target of surfaces) {
         if (reachable.has(target.id)) continue;
         if (!canSpringTo(spring.obj, target, current)) continue;
+        reachable.add(target.id);
+        queue.push(target);
+      }
+    }
+
+    for (const vineObj of vines) {
+      if (!canReachVine(current, vineObj, players)) continue;
+      for (const target of surfaces) {
+        if (reachable.has(target.id)) continue;
+        if (!canVineTo(vineObj, target)) continue;
         reachable.add(target.id);
         queue.push(target);
       }
@@ -533,7 +613,7 @@ function sameSurfacePathClear(
   if (!rangeContains(boxSurface.x1, boxSurface.x2, pathLeft, pathRight)) return false;
 
   for (const trap of level.objects) {
-    if (trap.type !== 'trap') continue;
+    if (trap.type !== 'trap' && trap.type !== 'spike') continue;
     if (!rangesOverlap(pathLeft, pathRight, objectLeft(trap), objectRight(trap))) continue;
     if (Math.abs(objectStandY(trap) - boxSurface.y) <= TILE_SIZE) return false;
   }
@@ -544,6 +624,16 @@ function sameSurfacePathClear(
   }
 
   return true;
+}
+
+function hasSurfaceUnderObject(surfaces: Surface[], object: LevelObjectDef): boolean {
+  const left = objectLeft(object);
+  const right = objectRight(object);
+  const bottom = object.y + object.height / 2;
+  return surfaces.some(s =>
+    Math.abs(s.y - bottom) <= TILE_SIZE * 0.75 &&
+    rangeContains(s.x1, s.x2, left, right),
+  );
 }
 
 function hasGroundUnderTrap(surfaces: Surface[], trap: LevelObjectDef): boolean {
@@ -628,7 +718,7 @@ export function validateLevel(
     .filter((surface): surface is Surface => surface !== null);
 
   const allStartIds = Array.from(new Set(startSurfaces.map(s => s.id)));
-  const assistedReachable = reachableSurfaceIds(level, surfaces, allStartIds, effectiveMinPlayers, true);
+  const assistedReachable = reachableSurfaceIds(level, surfaces, allStartIds, effectiveMinPlayers, false);
 
   if (goals.length === 1) {
     const goalSurface = findSurfaceForObject(surfaces, goals[0]);
@@ -654,7 +744,7 @@ export function validateLevel(
   const buttons = level.objects.filter(o => o.type === 'button');
   const doors = level.objects.filter(o => o.type === 'door');
   const boxes = level.objects.filter(o => o.type === 'box');
-  const traps = level.objects.filter(o => o.type === 'trap');
+  const traps = level.objects.filter(o => o.type === 'trap' || o.type === 'spike');
 
   for (const button of buttons) {
     const surface = findSurfaceForObject(surfaces, button);
@@ -675,9 +765,25 @@ export function validateLevel(
     if (!surface) push('error', `box "${box.id}" is not standing on any surface`);
   }
 
+  for (const vineObj of level.objects.filter(o => o.type === 'vine')) {
+    if (vineObj.x - vineObj.width / 2 < 0 || vineObj.x + vineObj.width / 2 > mapWidth) {
+      push('error', `vine "${vineObj.id}" is outside map bounds`);
+    }
+    const usableFromReachableSurface = surfaces.some(surface =>
+      assistedReachable.has(surface.id) && canReachVine(surface, vineObj, effectiveMinPlayers),
+    );
+    const launchesToSurface = surfaces.some(surface => canVineTo(vineObj, surface));
+    if (!usableFromReachableSurface || !launchesToSurface) {
+      push('warning', `vine "${vineObj.id}" does not connect two validated reachable surfaces`);
+    }
+  }
+
   for (const trap of traps) {
-    if (!hasGroundUnderTrap(surfaces, trap)) {
-      push('error', `trap "${trap.id}" is not fully supported by ground; it may cover a gap`);
+    const supported = trap.type === 'trap'
+      ? hasGroundUnderTrap(surfaces, trap)
+      : hasSurfaceUnderObject(surfaces, trap);
+    if (!supported) {
+      push('error', `${trap.type} "${trap.id}" is not fully supported by a surface`);
     }
     for (const object of level.objects) {
       if (object === trap) continue;
@@ -685,7 +791,7 @@ export function validateLevel(
         continue;
       }
       if (overlapsFloorTrap(object, trap)) {
-        push('error', `${object.type} "${object.id}" overlaps trap "${trap.id}"`);
+        push('error', `${object.type} "${object.id}" overlaps ${trap.type} "${trap.id}"`);
       }
     }
   }
@@ -767,7 +873,7 @@ export function validateAllPacks(packs: LevelPack[]): ValidationIssue[] {
 
   for (const minPlayers of [1, 2, 4]) {
     const count = packs.filter(pack => pack.minPlayers === minPlayers).length;
-    if (count !== 1) pushCatalogIssue('error', `expected exactly one ${minPlayers}+ pack, found ${count}`);
+    if (count !== 3) pushCatalogIssue('error', `expected exactly three ${minPlayers}+ packs, found ${count}`);
   }
 
   const levelIds = new Map<number, string>();

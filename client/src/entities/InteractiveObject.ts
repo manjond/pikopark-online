@@ -29,6 +29,10 @@ const BOX_FILL          = 0xb87333;  // copper brown — wooden crate
 const BOX_STROKE        = 0x6b3a1f;
 const LAVA_WALL_BASE    = 0xff3300;  // bright red — moving lava wall
 const LAVA_WALL_HOT     = 0xff8800;  // orange — hot streaks
+const VINE_ROPE         = 0x5bc06b;
+const VINE_LEAF         = 0x1f7a3a;
+const SPIKE_FILL        = 0xd8d8e8;
+const SPIKE_STROKE      = 0x4a4a5a;
 
 export class InteractiveObject {
   private readonly scene: Phaser.Scene;
@@ -55,6 +59,8 @@ export class InteractiveObject {
   private buttonPad: Phaser.GameObjects.Rectangle | null = null;
   /** Button body side fill — the dark "box" that shows depth. */
   private buttonBody: Phaser.GameObjects.Rectangle | null = null;
+  /** Button label ("LOCK" / "HOLD"). */
+  private buttonLabel: Phaser.GameObjects.Text | null = null;
 
   /** Physics image used for local player collision (doors only). */
   private doorImg: Phaser.Physics.Arcade.Image | null = null;
@@ -75,6 +81,8 @@ export class InteractiveObject {
   /** Lava visual extras — bubble arcs that pulse while the trap is active. */
   private lavaBubbles: Phaser.GameObjects.Arc[] = [];
   private lavaTopStrip: Phaser.GameObjects.Rectangle | null = null;
+  private vineGraphics: Phaser.GameObjects.Graphics | null = null;
+  private spikeGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -112,7 +120,7 @@ export class InteractiveObject {
       // Label above button (LOCK vs HOLD)
       const labelStr   = this.isLatchButton ? 'LOCK' : 'HOLD';
       const labelColor = this.isLatchButton ? '#88aaff' : '#ffaa44';
-      scene.add.text(data.x, PAD_UP_Y - PAD_H / 2 - 4, labelStr, {
+      this.buttonLabel = scene.add.text(data.x, PAD_UP_Y - PAD_H / 2 - 4, labelStr, {
         fontSize: '5px', color: labelColor, fontFamily: '"Press Start 2P"',
       }).setOrigin(0.5, 1).setDepth(4);
 
@@ -299,6 +307,43 @@ export class InteractiveObject {
         });
         this.lavaWallStrips.push(strip);
       }
+
+    } else if (data.type === 'vine') {
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, 0, 0);
+      const g = scene.add.graphics();
+      g.lineStyle(4, VINE_ROPE, 0.95);
+      g.strokeLineShape(new Phaser.Geom.Line(data.x, data.y - data.height / 2, data.x, data.y + data.height / 2));
+      g.fillStyle(VINE_LEAF, 1);
+      g.fillCircle(data.x, data.y - data.height / 2, 7);
+      g.fillCircle(data.x - 6, data.y - data.height / 2 + 14, 5);
+      g.fillCircle(data.x + 7, data.y - data.height / 2 + 28, 5);
+      const dir = (data.speed ?? 560) < 0 ? -1 : 1;
+      g.lineStyle(2, 0xffffff, 0.75);
+      g.strokeLineShape(new Phaser.Geom.Line(data.x - dir * 10, data.y + data.height / 2 - 12, data.x + dir * 14, data.y + data.height / 2 - 12));
+      g.fillTriangle(
+        data.x + dir * 20, data.y + data.height / 2 - 12,
+        data.x + dir * 10, data.y + data.height / 2 - 18,
+        data.x + dir * 10, data.y + data.height / 2 - 6,
+      );
+      g.setDepth(3);
+      this.vineGraphics = g;
+
+    } else if (data.type === 'spike') {
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, 0, 0);
+      const g = scene.add.graphics();
+      const left = data.x - data.width / 2;
+      const bottom = data.y + data.height / 2;
+      const count = Math.max(2, Math.floor(data.width / 16));
+      const spikeW = data.width / count;
+      g.fillStyle(SPIKE_FILL, 1);
+      g.lineStyle(1, SPIKE_STROKE, 1);
+      for (let i = 0; i < count; i++) {
+        const x = left + i * spikeW;
+        g.fillTriangle(x, bottom, x + spikeW / 2, bottom - data.height, x + spikeW, bottom);
+        g.strokeTriangle(x, bottom, x + spikeW / 2, bottom - data.height, x + spikeW, bottom);
+      }
+      g.setDepth(3);
+      this.spikeGraphics = g;
 
     } else if (data.type === 'box') {
       // Wooden crate — visible rect with cross-brace that moves with it
@@ -506,6 +551,7 @@ export class InteractiveObject {
     this.rect.destroy();
     if (this.buttonPad)  { this.scene.tweens.killTweensOf(this.buttonPad);  this.buttonPad.destroy(); }
     if (this.buttonBody) { this.buttonBody.destroy(); }
+    if (this.buttonLabel) { this.buttonLabel.destroy(); }
 
     if (this.goalStar)       { this.scene.tweens.killTweensOf(this.goalStar);       this.goalStar.destroy(); }
     if (this.goalGlow)       { this.scene.tweens.killTweensOf(this.goalGlow);       this.goalGlow.destroy(); }
@@ -518,6 +564,8 @@ export class InteractiveObject {
     this.lavaBubbles.forEach((b) => { this.scene.tweens.killTweensOf(b); b.destroy(); });
     this.lavaWallStrips.forEach((s) => { this.scene.tweens.killTweensOf(s); s.destroy(); });
     this.lavaWallStrips = [];
+    if (this.vineGraphics) { this.vineGraphics.destroy(); this.vineGraphics = null; }
+    if (this.spikeGraphics) { this.spikeGraphics.destroy(); this.spikeGraphics = null; }
     if (this.boxGraphics) { this.boxGraphics.destroy(); this.boxGraphics = null; }
 
     if (this.fireBarPivot) { this.fireBarPivot.destroy(); this.fireBarPivot = null; }

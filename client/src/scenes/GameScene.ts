@@ -81,6 +81,7 @@ export class GameScene extends Phaser.Scene {
   /** Interact key (E) — pickup/throw another player. */
   private interactKey!: Phaser.Input.Keyboard.Key;
   private touchInteractPending = false;
+  private interactBufferMs = 0;
 
   // ── Network ────────────────────────────────────────────────────────────────
   private network!: ColyseusClient;
@@ -262,9 +263,12 @@ export class GameScene extends Phaser.Scene {
     const movingLeft  = this.cursors.left.isDown  || this.wasd.left.isDown  || this.touchLeft;
     const movingRight = this.cursors.right.isDown || this.wasd.right.isDown || this.touchRight;
 
-    const interactPressed =
-      Phaser.Input.Keyboard.JustDown(this.interactKey) ||
-      this.touchInteractPending;
+    if (Phaser.Input.Keyboard.JustDown(this.interactKey) || this.touchInteractPending) {
+      this.interactBufferMs = 160;
+    } else {
+      this.interactBufferMs = Math.max(0, this.interactBufferMs - delta);
+    }
+    const interactPressed = this.interactKey.isDown || this.interactBufferMs > 0;
     this.touchInteractPending = false;
 
     // ── Camera follows the local player ───────────────────────────────────
@@ -591,6 +595,8 @@ export class GameScene extends Phaser.Scene {
           linkedId: def.linkedId,
           latching: def.latching ?? false,
           segments: def.segments,
+          speed: def.speed,
+          power: def.power,
         },
         def.type === 'door' ? this.doorGroup : undefined,
       );

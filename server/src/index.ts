@@ -44,7 +44,7 @@ app.options('/admin/levels', (_req, res) => { res.sendStatus(204); });
 app.options('/admin/levels/*', (_req, res) => { res.sendStatus(204); });
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'ok', version: '1.0.0', built: new Date().toISOString() });
+  res.json({ status: 'ok', version: '1.0.19', built: new Date().toISOString() });
 });
 
 const leaderboard = leaderboardInstance();

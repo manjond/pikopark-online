@@ -31,4 +31,6 @@ export class PlayerState extends Schema {
    * whether to snap or decay velocityX on key release.
    */
   onIce: boolean = false;
+  /** Cooldown after grabbing a vine so it cannot relaunch every tick. */
+  vineCooldownMs: number = 0;
 }

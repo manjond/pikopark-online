@@ -9,11 +9,11 @@ import {
   standardSpawns,
 } from './_helpers';
 
-const throwWindow = platformRect(760, FLOOR_TOP - 368, 200);
+const throwWindow = platformRect(760, FLOOR_TOP - 276, 200);
 
 export const LEVEL_9: LevelData = {
   id: 9,
-  name: 'Throw Window',
+  name: 'Stack Window',
   minPlayers: 2,
   mapWidth: 2000,
   solidRects: [

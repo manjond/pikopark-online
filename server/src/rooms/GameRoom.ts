@@ -352,7 +352,8 @@ export class GameRoom extends Room<GameState> {
       obj.linkedId = def.linkedId;
       obj.latching = def.latching ?? false;
       obj.activated = false;
-      obj.power = def.power ?? (def.type === 'spring' ? SPRING_VELOCITY : 0);
+      obj.power = def.power ?? (def.type === 'spring' ? SPRING_VELOCITY : def.type === 'vine' ? -720 : 0);
+      obj.speed = def.speed ?? (def.type === 'vine' ? 560 : 0);
       if (def.motion) {
         obj.motionAxis = def.motion.axis;
         obj.motionFrom = def.motion.from;
@@ -397,6 +398,7 @@ export class GameRoom extends Room<GameState> {
       player.carrying = '';
       player.prevInteract = false;
       player.atExit = false;
+      player.vineCooldownMs = 0;
       spawnIndex++;
     });
 
@@ -427,6 +429,10 @@ export class GameRoom extends Room<GameState> {
 
     // Broadcast player list at 5 Hz — catches late-subscribing lobby clients
     if (this.tickCount % 4 === 0) this.broadcastPlayerList();
+
+    this.state.players.forEach((player) => {
+      if (player.vineCooldownMs > 0) player.vineCooldownMs = Math.max(0, player.vineCooldownMs - deltaTime);
+    });
 
     // ── Reset pressure-sensitive buttons each tick ─────────────────────────────
     this.state.interactiveObjects.forEach((obj) => {
@@ -760,6 +766,33 @@ export class GameRoom extends Room<GameState> {
     });
 
     // ── Button trigger ────────────────────────────────────────────────────────
+    // Vines are mid-air launchers: touching one slings the player toward its
+    // signed speed direction, then gives a short cooldown to prevent retrigger.
+    this.state.interactiveObjects.forEach((vine) => {
+      if (vine.type !== 'vine') return;
+      const vLeft = vine.x - vine.width / 2;
+      const vRight = vine.x + vine.width / 2;
+      const vTop = vine.y - vine.height / 2;
+      const vBottom = vine.y + vine.height / 2;
+
+      this.state.players.forEach((player) => {
+        if (player.atExit || player.vineCooldownMs > 0) return;
+        const pLeft = player.x - TILE_SIZE / 2;
+        const pRight = player.x + TILE_SIZE / 2;
+        const pTop = player.y - TILE_SIZE / 2;
+        const pBottom = player.y + TILE_SIZE / 2;
+        if (!(pRight > vLeft && pLeft < vRight && pBottom > vTop && pTop < vBottom)) return;
+
+        const launchX = Math.abs(vine.speed || 560);
+        const dir = (vine.speed || 560) < 0 ? -1 : 1;
+        player.velocityX = dir * launchX;
+        player.velocityY = Math.min(player.velocityY, vine.power || -720);
+        player.isGrounded = false;
+        player.animation = 'jump';
+        player.vineCooldownMs = 450;
+      });
+    });
+
     this.state.interactiveObjects.forEach((obj) => {
       if (obj.type !== 'button') return;
       if (obj.latching && obj.activated) return;
@@ -823,8 +856,8 @@ export class GameRoom extends Room<GameState> {
     // ── Trap detection — touching a trap restarts the level ────────────────────
     if (!this.levelCompleted && !this.trapRestartPending) {
       this.state.interactiveObjects.forEach((obj) => {
-        if (obj.type !== 'trap' || this.trapRestartPending) return;
-        if (obj.activated) return; // linked button is held — trap is deactivated
+        if ((obj.type !== 'trap' && obj.type !== 'spike') || this.trapRestartPending) return;
+        if (obj.type === 'trap' && obj.activated) return; // linked button is held: trap is deactivated
         const tL = obj.x - obj.width  / 2;
         const tR = obj.x + obj.width  / 2;
         const tT = obj.y - obj.height / 2;
@@ -1049,10 +1082,11 @@ export class GameRoom extends Room<GameState> {
       this.state.interactiveObjects.forEach((obj) => {
         if (obj.type !== 'goal') return;
         const proximity = TILE_SIZE * 3;
+        const verticalProximity = TILE_SIZE * 2;
         const gLeft  = obj.x - obj.width  / 2 - proximity;
         const gRight = obj.x + obj.width  / 2 + proximity;
-        const gTop   = obj.y - obj.height / 2;
-        const gBot   = obj.y + obj.height / 2;
+        const gTop   = obj.y - obj.height / 2 - verticalProximity;
+        const gBot   = obj.y + obj.height / 2 + verticalProximity;
         this.state.players.forEach((player) => {
           if (player.atExit) {
             // Inside: exit on press EDGE only (prevents instant re-entry)

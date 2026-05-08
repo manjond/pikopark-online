@@ -13,7 +13,7 @@ export interface PlayerState {
   animation: string;
 }
 
-export type ObjectType = 'button' | 'lever' | 'platform' | 'door' | 'spring' | 'goal';
+export type ObjectType = 'button' | 'lever' | 'platform' | 'door' | 'spring' | 'goal' | 'vine' | 'spike';
 
 export interface ObjectState {
   id: string;
