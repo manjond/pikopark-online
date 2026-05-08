@@ -1,21 +1,29 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, crumblePlatform, floorTrap } from './_helpers';
+import {
+  FLOOR_TOP,
+  fullHeightDoor,
+  goalOnFloor,
+  groundRect,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
-// L6 — "Crumble Cross" (Solo Adept)
-// Crumble platforms bridge a lava pit. ONE latching button on far side.
+const shoulderKey = platformRect(620, FLOOR_TOP - 292, 144);
+
 export const LEVEL_6: LevelData = {
-  id: 6, name: 'Crumble Cross', minPlayers: 1, mapWidth: 1600,
-  solidRects: [ groundSegment(0, 288), groundSegment(960, 640) ],
+  id: 6,
+  name: 'Shoulder Key',
+  minPlayers: 2,
+  mapWidth: 1700,
+  solidRects: [
+    groundRect(1700),
+    shoulderKey,
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    floorTrap('lava6', 376, 576),
-    crumblePlatform('cr6a', 288, FLOOR_TOP - 32, 96),
-    crumblePlatform('cr6b', 432, FLOOR_TOP - 32, 96),
-    crumblePlatform('cr6c', 576, FLOOR_TOP - 32, 96),
-    crumblePlatform('cr6d', 720, FLOOR_TOP - 32, 96),
-    crumblePlatform('cr6e', 864, FLOOR_TOP - 32, 96),
-    floorButton('btn6', 1010, 'door6', { latching: true }),
-    fullHeightDoor('door6', 1160),
-    goalOnFloor('goal6', 1500),
+    platformButton('l6_stack_latch', shoulderKey, 'l6_door', { latching: true }),
+    fullHeightDoor('l6_door', 1100),
+    goalOnFloor('l6_goal', 1620),
   ],
 };

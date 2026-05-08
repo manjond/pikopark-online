@@ -1162,16 +1162,6 @@ export class GameScene extends Phaser.Scene {
   // ─── Level geometry ───────────────────────────────────────────────────────────
 
   private buildSolidRects(solidRects: SolidRect[]): void {
-    // Always paint a continuous floor strip at the bottom of the full map so
-    // lava traps never visually float above a void (gaps are physics-cosmetic only).
-    const mapW = this.physics.world.bounds.width || GAME_WIDTH;
-    const FLOOR_Y = GAME_HEIGHT - TILE_SIZE;
-    const floorTiles = Math.ceil(mapW / TILE_SIZE);
-    for (let i = 0; i < floorTiles; i++) {
-      const x = i * TILE_SIZE + TILE_SIZE / 2;
-      this.tiles.create(x, FLOOR_Y + TILE_SIZE / 2, 'tile_ground');
-    }
-
     for (const rect of solidRects) {
       const textureKey =
         rect.tileType === 'ground' ? 'tile_ground' :

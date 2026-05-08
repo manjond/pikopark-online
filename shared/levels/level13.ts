@@ -1,26 +1,38 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, lavaWall, floorTrap, fireBar } from './_helpers';
+import {
+  FLOOR_TOP,
+  fireBar,
+  floorButton,
+  fullHeightDoor,
+  goalOnFloor,
+  groundRect,
+  pushBox,
+  standardSpawns,
+} from './_helpers';
 
-const bypass = platformRect(960, FLOOR_TOP - 128, 128);
-
-// L13 — "Lava Chase & Fire" (Solo Master)
-// Wall 120 px/s + two fire bars. TWO doors, each with own latching button.
 export const LEVEL_13: LevelData = {
-  id: 13, name: 'Lava Chase & Fire', minPlayers: 1, mapWidth: 3200,
-  solidRects: [ groundSegment(0, 3200), bypass ],
+  id: 13,
+  name: 'Cargo Council',
+  minPlayers: 4,
+  mapWidth: 2600,
+  solidRects: [
+    groundRect(2600),
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    lavaWall('wall13', -64, 120),
-    floorTrap('trap13a', 480, 80),
-    fireBar('fb13a', 700, FLOOR_TOP - 48, 2, 1.4, 0),
-    floorTrap('trap13b', 1200, 80),
-    fireBar('fb13b', 1450, FLOOR_TOP - 48, 3, -1.1, 60),
-    floorButton('btn13a', 1700, 'door13a', { latching: true }),
-    fullHeightDoor('door13a', 1900),
-    floorTrap('trap13c', 2300, 80),
-    fireBar('fb13c', 2500, FLOOR_TOP - 48, 2, 1.6, 180),
-    floorButton('btn13b', 2800, 'door13b', { latching: true }),
-    fullHeightDoor('door13b', 3000),
-    goalOnFloor('goal13', 3140),
+    floorButton('l13_crew_lock', 900, 'l13_door', {
+      latching: true,
+      requiredPlayers: 4,
+      width: 176,
+    }),
+    pushBox('l13_box_a', 320, FLOOR_TOP - 32),
+    pushBox('l13_box_b', 450, FLOOR_TOP - 32),
+    pushBox('l13_box_c', 580, FLOOR_TOP - 32),
+    floorButton('l13_box_lock_a', 1200, 'l13_door', { width: 56 }),
+    floorButton('l13_box_lock_b', 1320, 'l13_door', { width: 56 }),
+    floorButton('l13_box_lock_c', 1440, 'l13_door', { width: 56 }),
+    fireBar('l13_cargo_sweeper', 1640, FLOOR_TOP - 64, 2, -1.1, 90),
+    fullHeightDoor('l13_door', 1820),
+    goalOnFloor('l13_goal', 2520),
   ],
 };

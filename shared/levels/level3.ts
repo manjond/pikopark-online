@@ -1,20 +1,34 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, floorTrap } from './_helpers';
+import {
+  FLOOR_TOP,
+  floorSpring,
+  fullHeightDoor,
+  goalOnFloor,
+  groundSegment,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
-const plat1 = platformRect(370, FLOOR_TOP - 112, 128);
-const plat2 = platformRect(670, FLOOR_TOP - 112, 128);
+const springLanding = platformRect(560, FLOOR_TOP - 368, 160);
+const canalKey = platformRect(780, FLOOR_TOP - 368, 160);
 
-// L3 — "Lava Dodge" (Solo Cadet)
-// Lava strips force platform route. ONE latching button opens the door.
 export const LEVEL_3: LevelData = {
-  id: 3, name: 'Lava Dodge', minPlayers: 1, mapWidth: 1600,
-  solidRects: [ groundSegment(0, 1600), plat1, plat2 ],
+  id: 3,
+  name: 'Spring Sluice',
+  minPlayers: 1,
+  mapWidth: 2100,
+  solidRects: [
+    groundSegment(0, 520),
+    groundSegment(900, 1200),
+    springLanding,
+    canalKey,
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    floorTrap('trap3a', 440, 128),
-    floorTrap('trap3b', 760, 112),
-    floorButton('btn3', 1050, 'door3', { latching: true }),
-    fullHeightDoor('door3', 1200),
-    goalOnFloor('goal3', 1520),
+    floorSpring('l3_spring', 430, 56),
+    platformButton('l3_gate_key', canalKey, 'l3_door', { latching: true }),
+    fullHeightDoor('l3_door', 1320),
+    goalOnFloor('l3_goal', 2020),
   ],
 };

@@ -1,21 +1,36 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, fireBar } from './_helpers';
+import {
+  FLOOR_TOP,
+  fireBar,
+  floorButton,
+  floorTrap,
+  fullHeightDoor,
+  goalOnFloor,
+  groundRect,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
-const bypass1 = platformRect(460, FLOOR_TOP - 128, 96);
-const bypass2 = platformRect(780, FLOOR_TOP - 128, 96);
-
-// L7 — "Fire Alley" (Solo Adept)
-// Time your dash past three rotating fire bars. Latching button opens exit.
 export const LEVEL_7: LevelData = {
-  id: 7, name: 'Fire Alley', minPlayers: 1, mapWidth: 1600,
-  solidRects: [ groundSegment(0, 1600), bypass1, bypass2 ],
+  id: 7,
+  name: 'Double Press Foundry',
+  minPlayers: 2,
+  mapWidth: 1900,
+  solidRects: [
+    groundRect(1900),
+    platformRect(850, FLOOR_TOP - 128, 128),
+    platformRect(1030, FLOOR_TOP - 192, 128),
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    fireBar('fb7a', 400,  FLOOR_TOP - 32, 2,  1.2,   0),
-    fireBar('fb7b', 700,  FLOOR_TOP - 32, 2, -1.0,  90),
-    fireBar('fb7c', 1020, FLOOR_TOP - 32, 2,  1.5, 180),
-    floorButton('btn7', 1180, 'door7', { latching: true }),
-    fullHeightDoor('door7', 1340),
-    goalOnFloor('goal7', 1540),
+    floorButton('l7_pair_lock', 620, 'l7_door', {
+      latching: true,
+      requiredPlayers: 2,
+      width: 112,
+    }),
+    floorTrap('l7_lava_skip', 1020, 96),
+    fireBar('l7_overhead', 1220, FLOOR_TOP - 96, 2, -1.0, 20),
+    fullHeightDoor('l7_door', 1400),
+    goalOnFloor('l7_goal', 1830),
   ],
 };

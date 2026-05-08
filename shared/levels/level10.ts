@@ -1,23 +1,45 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, lavaWall, floorTrap, fireBar } from './_helpers';
+import {
+  FLOOR_TOP,
+  fireBar,
+  floorButton,
+  fullHeightDoor,
+  goalOnFloor,
+  groundSegment,
+  movingPlatform,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
-const bypass = platformRect(880, FLOOR_TOP - 128, 128);
+const stackKey = platformRect(520, FLOOR_TOP - 292, 160);
 
-// L10 — "Speed Run" (Solo Adept)
-// Lava wall 110 px/s. Two latching buttons to unlock two doors. Run!
 export const LEVEL_10: LevelData = {
-  id: 10, name: 'Speed Run', minPlayers: 1, mapWidth: 2800,
-  solidRects: [ groundSegment(0, 2800), bypass ],
+  id: 10,
+  name: 'Duo Lockworks',
+  minPlayers: 2,
+  mapWidth: 2600,
+  solidRects: [
+    groundSegment(0, 700),
+    groundSegment(1120, 1480),
+    stackKey,
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    lavaWall('wall10', -64, 110),
-    floorTrap('trap10a', 560, 80),
-    fireBar('fb10', 760, FLOOR_TOP - 48, 2, 1.3, 45),
-    floorButton('btn10a', 1100, 'door10a', { latching: true }),
-    fullHeightDoor('door10a', 1300),
-    floorTrap('trap10b', 1600, 96),
-    floorButton('btn10b', 1900, 'door10b', { latching: true }),
-    fullHeightDoor('door10b', 2100),
-    goalOnFloor('goal10', 2700),
+    floorButton('l10_pair_lock', 310, 'l10_door', {
+      latching: true,
+      requiredPlayers: 2,
+      width: 112,
+    }),
+    platformButton('l10_stack_key', stackKey, 'l10_door', { latching: true }),
+    movingPlatform('l10_bridge', 696, FLOOR_TOP - 128, 128, {
+      axis: 'x',
+      from: 760,
+      to: 1050,
+      speed: 105,
+    }),
+    fireBar('l10_mid_sweeper', 1550, FLOOR_TOP - 64, 2, -1.2, 90),
+    fullHeightDoor('l10_door', 1900),
+    goalOnFloor('l10_goal', 2520),
   ],
 };

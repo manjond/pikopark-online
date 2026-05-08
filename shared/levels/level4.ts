@@ -1,24 +1,33 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, floorTrap } from './_helpers';
+import {
+  FLOOR_TOP,
+  crumblePlatform,
+  fireBar,
+  floorButton,
+  fullHeightDoor,
+  goalOnFloor,
+  groundSegment,
+  standardSpawns,
+} from './_helpers';
 
-const plat1 = platformRect(440, FLOOR_TOP - 144, 96);
-const plat2 = platformRect(720, FLOOR_TOP - 96,  96);
-
-// L4 — "Two Keys" (Solo Cadet)
-// BOTH latching buttons must be pressed (on separate platforms) before door opens.
-// Both are LEFT of the door — no deadlock. Gaps are pits for tension.
 export const LEVEL_4: LevelData = {
-  id: 4, name: 'Two Keys', minPlayers: 1, mapWidth: 1440,
+  id: 4,
+  name: 'Crumble Arcade',
+  minPlayers: 1,
+  mapWidth: 2200,
   solidRects: [
-    groundSegment(0, 280), groundSegment(380, 256), groundSegment(680, 256), groundSegment(980, 460),
-    plat1, plat2,
+    groundSegment(0, 360),
+    groundSegment(1080, 1120),
   ],
   spawnPoints: standardSpawns(),
   objects: [
-    floorTrap('trap4a', 400, 24), floorTrap('trap4b', 641, 24), floorTrap('trap4c', 943, 24),
-    floorButton('btn4a', plat1.x + 48, 'door4', { latching: true }),
-    floorButton('btn4b', plat2.x + 48, 'door4', { latching: true }),
-    fullHeightDoor('door4', 1100),
-    goalOnFloor('goal4', 1360),
+    crumblePlatform('l4_c1', 420, FLOOR_TOP - 96, 96),
+    crumblePlatform('l4_c2', 560, FLOOR_TOP - 96, 96),
+    crumblePlatform('l4_c3', 700, FLOOR_TOP - 96, 96),
+    crumblePlatform('l4_c4', 840, FLOOR_TOP - 96, 96),
+    floorButton('l4_latch', 1180, 'l4_door', { latching: true }),
+    fireBar('l4_spinner', 1370, FLOOR_TOP - 48, 2, -1.3, 90),
+    fullHeightDoor('l4_door', 1550),
+    goalOnFloor('l4_goal', 2110),
   ],
 };

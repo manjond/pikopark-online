@@ -1,19 +1,34 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns } from './_helpers';
+import {
+  FLOOR_TOP,
+  fullHeightDoor,
+  goalOnFloor,
+  groundSegment,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
-// L1 — "Welcome Gate" (Solo Cadet)
-// Jump a pit, press ONE latching button, walk through door to exit.
-// Single latching button = door stays open forever, no trapping.
+const upper1 = platformRect(260, FLOOR_TOP - 128, 160);
+const upper2 = platformRect(520, FLOOR_TOP - 192, 160);
+const keyPlatform = platformRect(780, FLOOR_TOP - 256, 192);
+
 export const LEVEL_1: LevelData = {
-  id: 1, name: 'Welcome Gate', minPlayers: 1, mapWidth: 1600,
+  id: 1,
+  name: 'Switchback Key',
+  minPlayers: 1,
+  mapWidth: 1800,
   solidRects: [
-    groundSegment(0, 320),
-    groundSegment(480, 1120),
+    groundSegment(0, 640),
+    groundSegment(760, 1040),
+    upper1,
+    upper2,
+    keyPlatform,
   ],
   spawnPoints: standardSpawns(),
   objects: [
-    floorButton('btn1', 700, 'door1', { latching: true }),
-    fullHeightDoor('door1', 840),
-    goalOnFloor('goal1', 1480),
+    platformButton('l1_key', keyPlatform, 'l1_door', { latching: true }),
+    fullHeightDoor('l1_door', 1180),
+    goalOnFloor('l1_goal', 1700),
   ],
 };

@@ -1,16 +1,29 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundRect, floorButton, fullHeightDoor, standardSpawns, pushBox } from './_helpers';
+import {
+  FLOOR_TOP,
+  fullHeightDoor,
+  goalOnFloor,
+  groundRect,
+  platformButton,
+  platformRect,
+  standardSpawns,
+} from './_helpers';
 
-// L9 — "Box Job" (Solo Adept): push box to pressure button, box holds door open.
-// No lava — box is the challenge, not a hazard crossing.
+const throwWindow = platformRect(760, FLOOR_TOP - 368, 200);
+
 export const LEVEL_9: LevelData = {
-  id: 9, name: 'Box Job', minPlayers: 1, mapWidth: 1440,
-  solidRects: [ groundRect(1440) ],
+  id: 9,
+  name: 'Throw Window',
+  minPlayers: 2,
+  mapWidth: 2000,
+  solidRects: [
+    groundRect(2000),
+    throwWindow,
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    pushBox('box9', 300, FLOOR_TOP - 32),
-    floorButton('btn9', 820, 'door9', { latching: false }),
-    fullHeightDoor('door9', 1050),
-    goalOnFloor('goal9', 1380),
+    platformButton('l9_throw_latch', throwWindow, 'l9_door', { latching: true }),
+    fullHeightDoor('l9_door', 1460),
+    goalOnFloor('l9_goal', 1930),
   ],
 };

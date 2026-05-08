@@ -1,23 +1,35 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, floorTrap, movingPlatform } from './_helpers';
+import {
+  FLOOR_TOP,
+  fireBar,
+  floorButton,
+  fullHeightDoor,
+  goalOnFloor,
+  groundRect,
+  platformButton,
+  platformRect,
+  pushBox,
+  standardSpawns,
+} from './_helpers';
 
-const f1W = 96;
-const ferry1 = movingPlatform('plat8a', 288, FLOOR_TOP - 64, f1W, { axis: 'x', from: 288+f1W/2, to: 700+f1W/2, speed: 140 });
-const f2W = 96;
-const ferry2 = movingPlatform('plat8b', 860, FLOOR_TOP - 96, f2W, { axis: 'x', from: 860+f2W/2, to: 1200+f2W/2, speed: 160 });
+const boostKey = platformRect(640, FLOOR_TOP - 292, 160);
 
-// L8 — "Moving Day" (Solo Adept)
-// Ferries cross lava pits. Button on the safe mid-island, lava starts AFTER the island.
 export const LEVEL_8: LevelData = {
-  id: 8, name: 'Moving Day', minPlayers: 1, mapWidth: 1800,
-  solidRects: [ groundSegment(0, 288), groundSegment(800, 128), groundSegment(1300, 500) ],
+  id: 8,
+  name: 'Crate Boost',
+  minPlayers: 2,
+  mapWidth: 2200,
+  solidRects: [
+    groundRect(2200),
+    boostKey,
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    floorTrap('lava8a', 400, 440),          // first pit: x=180-620
-    floorTrap('lava8b', 1020, 220),         // second pit: x=910-1130 (clear of island x=800-928)
-    ferry1, ferry2,
-    floorButton('btn8', 862, 'door8', { latching: true }),   // on safe mid-island
-    fullHeightDoor('door8', 1460),
-    goalOnFloor('goal8', 1730),
+    platformButton('l8_stack_key', boostKey, 'l8_door', { latching: true }),
+    pushBox('l8_box', 1120, FLOOR_TOP - 32),
+    floorButton('l8_box_lock', 1450, 'l8_door', { width: 64 }),
+    fireBar('l8_box_sweeper', 1580, FLOOR_TOP - 64, 2, 1.1, 0),
+    fullHeightDoor('l8_door', 1720),
+    goalOnFloor('l8_goal', 2140),
   ],
 };

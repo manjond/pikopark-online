@@ -1,20 +1,32 @@
 import { LevelData } from '../level';
-import { FLOOR_TOP, goalOnFloor, groundSegment, floorButton, fullHeightDoor, standardSpawns, platformRect, floorTrap } from './_helpers';
+import {
+  FLOOR_TOP,
+  fireBar,
+  floorButton,
+  fullHeightDoor,
+  goalOnFloor,
+  groundRect,
+  platformRect,
+  pushBox,
+  standardSpawns,
+} from './_helpers';
 
-const plat1 = platformRect(400, FLOOR_TOP - 96,  128);
-const plat2 = platformRect(608, FLOOR_TOP - 192, 128);
-const plat3 = platformRect(816, FLOOR_TOP - 256, 128);
-
-// L2 — "Step Up" (Solo Cadet)
-// Climb platforms, press latching button at top to open door. Lava at x=400+
 export const LEVEL_2: LevelData = {
-  id: 2, name: 'Step Up', minPlayers: 1, mapWidth: 1440,
-  solidRects: [ groundSegment(0, 1440), plat1, plat2, plat3 ],
+  id: 2,
+  name: 'Crate Switchyard',
+  minPlayers: 1,
+  mapWidth: 1900,
+  solidRects: [
+    groundRect(1900),
+    platformRect(650, FLOOR_TOP - 128, 128),
+    platformRect(900, FLOOR_TOP - 176, 128),
+  ],
   spawnPoints: standardSpawns(),
   objects: [
-    floorTrap('trap2a', 380, 80),
-    floorButton('btn2', plat3.x + 64, 'door2', { latching: true }),
-    fullHeightDoor('door2', 1100),
-    goalOnFloor('goal2', 1360),
+    pushBox('l2_box', 240, FLOOR_TOP - 32),
+    floorButton('l2_crate_lock', 1080, 'l2_door', { width: 64 }),
+    fireBar('l2_sweeper', 1260, FLOOR_TOP - 48, 2, 1.2, 10),
+    fullHeightDoor('l2_door', 1420),
+    goalOnFloor('l2_goal', 1820),
   ],
 };
