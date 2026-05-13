@@ -2,6 +2,13 @@ import { Client } from 'colyseus';
 import { GameState } from '../state/GameState';
 import { InputMessage, MOVE_SPEED, JUMP_VELOCITY, TILE_SIZE } from '@pikopark/shared';
 
+const INPUT_DT = 1 / 60;
+const GROUND_ACCEL = 5200;
+const GROUND_DECEL = 6400;
+const AIR_ACCEL = 3600;
+const AIR_DECEL = 2200;
+const ICE_DECEL = 420;
+
 export function handlePlayerInput(
   state: GameState,
   client: Client,
@@ -20,27 +27,28 @@ export function handlePlayerInput(
     return;
   }
 
-  // Horizontal movement
-  if (input.left) {
-    player.velocityX = -MOVE_SPEED;
-    player.animation = 'walk';
-    player.facing = -1;
-  } else if (input.right) {
-    player.velocityX = MOVE_SPEED;
-    player.animation = 'walk';
-    player.facing = 1;
-  } else if (player.onIce && player.isGrounded) {
-    // Ice: no instant snap on key release — decay slowly so the player slides.
-    // Airborne ice-launches still slide (velocityX preserved until grounded).
-    player.velocityX *= 0.985;
-    if (Math.abs(player.velocityX) < 5) player.velocityX = 0;
-    player.animation = Math.abs(player.velocityX) > 10 ? 'walk' : 'idle';
-  } else {
-    player.velocityX = 0;
-    player.animation = 'idle';
-  }
+  // Horizontal movement: ease toward the target instead of snapping instantly.
+  // This keeps controls responsive while removing the heavy/stuttery feel.
+  const moveDir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  if (moveDir !== 0) player.facing = moveDir;
 
-  // Jump — only if grounded AND no player is standing on this player's head
+  const targetVX = moveDir * MOVE_SPEED;
+  const accel = player.isGrounded
+    ? moveDir === 0 && player.onIce
+      ? ICE_DECEL
+      : moveDir === 0
+        ? GROUND_DECEL
+        : GROUND_ACCEL
+    : moveDir === 0
+      ? AIR_DECEL
+      : AIR_ACCEL;
+  player.velocityX = approach(player.velocityX, targetVX, accel * INPUT_DT);
+  if (Math.abs(player.velocityX) < 2) player.velocityX = 0;
+  player.animation = player.isGrounded
+    ? Math.abs(player.velocityX) > 12 ? 'walk' : 'idle'
+    : 'jump';
+
+  // Jump - only if grounded AND no player is standing on this player's head.
   if (input.jump && player.isGrounded) {
     let playerOnTop = false;
     const myHead = player.y - TILE_SIZE / 2;
@@ -61,4 +69,10 @@ export function handlePlayerInput(
   }
 
   player.isInteracting = input.interact;
+}
+
+function approach(current: number, target: number, maxDelta: number): number {
+  if (current < target) return Math.min(current + maxDelta, target);
+  if (current > target) return Math.max(current - maxDelta, target);
+  return current;
 }

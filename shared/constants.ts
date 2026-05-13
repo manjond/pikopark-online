@@ -4,8 +4,8 @@ export const MIN_PLAYERS_TO_START = 2;
 export const SERVER_PORT = 2567;
 export const CLIENT_PORT = 5173;
 
-/** Server authoritative tick rate (Hz) */
-export const TICK_RATE = 20;
+/** Server authoritative tick rate (Hz). Higher tick rate keeps remote motion smoother. */
+export const TICK_RATE = 30;
 
 /** Game canvas resolution — 1280×720 (HD, 16:9) */
 export const GAME_WIDTH  = 1280;
