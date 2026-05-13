@@ -268,6 +268,7 @@ export function crumbleNoRespawn(
   x: number,
   yTop: number,
   width: number = TILE_SIZE * 3,
+  delayMs: number = 400,
 ): LevelObjectDef {
   return {
     id,
@@ -279,7 +280,17 @@ export function crumbleNoRespawn(
     requiredPlayers: 0,
     linkedId: '',
     noRespawn: true,
+    crumbleDelayMs: delayMs,
   };
+}
+
+export function fragileBridgeTile(
+  id: string,
+  x: number,
+  yTop: number,
+  delayMs: number = 700,
+): LevelObjectDef {
+  return crumbleNoRespawn(id, x, yTop, TILE_SIZE, delayMs);
 }
 
 export function lavaWall(

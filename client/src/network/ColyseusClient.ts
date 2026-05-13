@@ -42,6 +42,8 @@ export interface NetworkObject {
   readonly segments?: number;
   readonly speed?: number;
   readonly power?: number;
+  readonly noRespawn?: boolean;
+  readonly crumbleDelayMs?: number;
 }
 
 /** Top-level game state received from the server. */

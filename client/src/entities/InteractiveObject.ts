@@ -281,8 +281,10 @@ export class InteractiveObject {
       }
 
     } else if (data.type === 'crumble') {
-      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, CRUMBLE_FILL);
-      this.rect.setStrokeStyle(2, CRUMBLE_STROKE);
+      const fill = data.noRespawn ? 0x8f6a50 : CRUMBLE_FILL;
+      const stroke = data.noRespawn ? 0xffd08a : CRUMBLE_STROKE;
+      this.rect = scene.add.rectangle(data.x, data.y, data.width, data.height, fill);
+      this.rect.setStrokeStyle(2, stroke);
       this.rect.setDepth(1);
 
     } else if (data.type === 'lavawall') {

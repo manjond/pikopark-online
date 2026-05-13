@@ -32,7 +32,7 @@ type PaletteKind =
   | 'ground' | 'platform' | 'ice'
   | 'spawn' | 'goal' | 'button' | 'door'
   | 'trap' | 'spike' | 'spring' | 'movingPlatform'
-  | 'crumble' | 'firebar' | 'box' | 'lavawall' | 'vine';
+  | 'crumble' | 'fragileBridge' | 'firebar' | 'box' | 'lavawall' | 'vine';
 
 type Selection =
   | { kind: 'rect'; index: number }
@@ -76,6 +76,7 @@ const PALETTE: PaletteItem[] = [
   { kind: 'spring', label: 'Spring', group: 'Movement', color: 0x22cc88 },
   { kind: 'movingPlatform', label: 'Mover', group: 'Movement', color: 0xc88c32 },
   { kind: 'crumble', label: 'Crumble', group: 'Movement', color: 0xa88060 },
+  { kind: 'fragileBridge', label: 'Break Tile', group: 'Movement', color: 0xffd08a },
   { kind: 'vine', label: 'Vine', group: 'Movement', color: 0x5bc06b },
 ];
 
@@ -370,6 +371,18 @@ export class EditorScene extends Phaser.Scene {
         row('segments', String(o.segments ?? 3), () => { o.segments = Math.max(1, (o.segments ?? 3) - 1); }, () => { o.segments = Math.min(8, (o.segments ?? 3) + 1); });
         row('speed', String(o.power ?? 2), () => { o.power = Math.max(0.5, (o.power ?? 2) - 0.5); }, () => { o.power = Math.min(8, (o.power ?? 2) + 0.5); });
       }
+      if (o.type === 'crumble') {
+        button(`RESPAWN: ${o.noRespawn ? 'NO' : 'YES'}`, '#88ccff', () => {
+          this.pushUndo();
+          o.noRespawn = !o.noRespawn;
+          this.afterEdit();
+        });
+        row('break ms', String(o.crumbleDelayMs ?? 400), () => {
+          o.crumbleDelayMs = Math.max(100, (o.crumbleDelayMs ?? 400) - 100);
+        }, () => {
+          o.crumbleDelayMs = Math.min(3000, (o.crumbleDelayMs ?? 400) + 100);
+        });
+      }
       if (o.type === 'lavawall' || o.type === 'vine') {
         row('speed', String(o.speed ?? 100), () => { o.speed = (o.speed ?? 100) - 40; }, () => { o.speed = (o.speed ?? 100) + 40; });
       }
@@ -624,7 +637,7 @@ export class EditorScene extends Phaser.Scene {
       this.levelGfx.strokeRoundedRect(left - 6, top - 18, o.width + 12, o.height + 36, 4);
       return;
     }
-    const color = objectColor(o.type);
+    const color = o.type === 'crumble' && o.noRespawn ? 0xffd08a : objectColor(o.type);
     if (o.type === 'spike') {
       this.levelGfx.fillStyle(color, 1);
       const count = Math.max(2, Math.floor(o.width / 16));
@@ -1142,7 +1155,9 @@ function objectFor(kind: PaletteKind, id: string, x: number, y: number, level: L
       return { id, type: 'platform', x: from, y, width: 128, height: TILE_SIZE, requiredPlayers: 0, linkedId: '', motion: { axis: 'x', from, to, speed: 80 } };
     }
     case 'crumble':
-      return { id, type: 'crumble', x: floorX, y, width: 128, height: TILE_SIZE, requiredPlayers: 0, linkedId: '' };
+      return { id, type: 'crumble', x: floorX, y, width: 128, height: TILE_SIZE, requiredPlayers: 0, linkedId: '', crumbleDelayMs: 400 };
+    case 'fragileBridge':
+      return { id, type: 'crumble', x: floorX, y, width: TILE_SIZE, height: TILE_SIZE, requiredPlayers: 0, linkedId: '', noRespawn: true, crumbleDelayMs: 700 };
     case 'firebar':
       return { id, type: 'firebar', x: floorX, y, width: TILE_SIZE, height: TILE_SIZE, requiredPlayers: 0, linkedId: '', segments: 3, power: 2, angleDeg: 0 };
     case 'box':

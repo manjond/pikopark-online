@@ -604,6 +604,8 @@ export class GameScene extends Phaser.Scene {
           segments: def.segments,
           speed: def.speed,
           power: def.power,
+          noRespawn: def.noRespawn,
+          crumbleDelayMs: def.crumbleDelayMs,
         },
         def.type === 'door' ? this.doorGroup : undefined,
       );

@@ -64,6 +64,8 @@ export class ObjectState extends Schema {
   boxVY: number = 0;
   /** Whether crumble should NOT respawn. */
   noRespawn: boolean = false;
+  /** Milliseconds a crumble platform shakes before falling. */
+  crumbleDelayMs: number = 400;
 
   /**
    * Advance motion by `dtMs` and update x/y, plus velocities for riders.

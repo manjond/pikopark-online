@@ -57,6 +57,8 @@ export interface LevelObjectDef {
   speed?: number;
   /** Only for type='crumble' — if true the platform does NOT respawn after falling. */
   noRespawn?: boolean;
+  /** Only for type='crumble' — milliseconds spent shaking before the tile falls. */
+  crumbleDelayMs?: number;
 }
 
 export interface LevelData {

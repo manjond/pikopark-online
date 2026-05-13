@@ -374,6 +374,7 @@ export class GameRoom extends Room<GameState> {
         obj.crumblePhase = 'intact';
         obj.crumbleTimer = 0;
         obj.noRespawn = def.noRespawn ?? false;
+        obj.crumbleDelayMs = Math.max(100, Math.min(3000, def.crumbleDelayMs ?? 400));
       }
       if (def.type === 'lavawall') {
         obj.lavaWallSpeed = def.speed ?? 100;
@@ -620,7 +621,7 @@ export class GameRoom extends Room<GameState> {
             player.onIce = false;
             if (crumble.crumblePhase === 'intact') {
               crumble.crumblePhase = 'shaking';
-              crumble.crumbleTimer = 400;
+              crumble.crumbleTimer = crumble.crumbleDelayMs;
             }
           }
         });
