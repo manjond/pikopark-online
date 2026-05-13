@@ -3,6 +3,7 @@ import { GameState, ObjectState } from '../state/GameState';
 import { PlayerState } from '../state/Player';
 import { handlePlayerInput } from '../commands/PlayerCommands';
 import { Leaderboard, leaderboardInstance } from '../leaderboard/Leaderboard';
+import { customLevelStoreInstance } from '../admin/CustomLevelStore';
 import {
   InputMessage,
   MAX_PLAYERS,
@@ -82,6 +83,7 @@ export class GameRoom extends Room<GameState> {
   private inputRates = new Map<string, { count: number; windowStart: number }>();
 
   private leaderboard: Leaderboard = leaderboardInstance();
+  private customLevels = customLevelStoreInstance();
 
   onCreate(_options: Record<string, unknown>): void {
     this.setState(new GameState());
@@ -107,7 +109,7 @@ export class GameRoom extends Room<GameState> {
 
     this.onMessage<{ packId: string }>('selectPack', (client, data) => {
       if (client.sessionId !== this.hostId || this.gameStarted) return;
-      const pack = ALL_PACKS.find((p) => p.id === data.packId);
+      const pack = this.findPack(data.packId);
       if (!pack) return;
       this.selectedPack = pack;
       this.loadLevel(0); // reset to first level of new pack in lobby preview
@@ -135,6 +137,7 @@ export class GameRoom extends Room<GameState> {
         packId: this.selectedPack.id,
         levelId: firstLevel.id,
         mapWidth: firstLevel.mapWidth ?? GAME_WIDTH,
+        level: firstLevel,
       });
     });
 
@@ -145,7 +148,7 @@ export class GameRoom extends Room<GameState> {
     this.onMessage<{ packId: string }>('continuePack', (client, data) => {
       if (client.sessionId !== this.hostId) return;
       if (!this.packCompletedPending) return;
-      const pack = ALL_PACKS.find((p) => p.id === data.packId);
+      const pack = this.findPack(data.packId);
       if (!pack) return;
       const playerCount = this.state.players.size;
       if (playerCount < pack.minPlayers) {
@@ -249,6 +252,7 @@ export class GameRoom extends Room<GameState> {
           packId: this.selectedPack.id,
           levelId: lvl.id,
           mapWidth: lvl.mapWidth ?? GAME_WIDTH,
+          level: lvl,
         });
       }
 
@@ -285,6 +289,7 @@ export class GameRoom extends Room<GameState> {
         packId: this.selectedPack.id,
         levelId: levelData.id,
         mapWidth: levelData.mapWidth ?? GAME_WIDTH,
+        level: levelData,
       });
     }
 
@@ -412,7 +417,7 @@ export class GameRoom extends Room<GameState> {
       // `restart` flag tells the client this is a death-respawn, not a fresh
       // level — the HUD timer should keep ticking instead of resetting so
       // the on-screen value matches the server-side leaderboard time.
-      this.broadcast('levelStart', { levelId: levelData.id, mapWidth: this.mapWidth, restart });
+      this.broadcast('levelStart', { levelId: levelData.id, mapWidth: this.mapWidth, restart, level: levelData });
       const objStates: Array<{ id: string; activated: boolean }> = [];
       this.state.interactiveObjects.forEach((obj) => {
         objStates.push({ id: obj.id, activated: obj.activated });
@@ -1143,7 +1148,7 @@ export class GameRoom extends Room<GameState> {
         } else {
           this.packCompletedPending = true;
           const activeCount = this.state.players.size;
-          const available = ALL_PACKS
+          const available = this.getAllPacks()
             .filter((p) => activeCount >= p.minPlayers)
             .map((p) => ({ id: p.id, name: p.name, minPlayers: p.minPlayers }));
           this.clock.setTimeout(() => {
@@ -1364,6 +1369,17 @@ export class GameRoom extends Room<GameState> {
       name: this.selectedPack.name,
       minPlayers: this.selectedPack.minPlayers,
     });
+  }
+
+  private getAllPacks(): LevelPack[] {
+    return [
+      ...ALL_PACKS,
+      ...this.customLevels.listAllPacks().map((entry) => entry.data),
+    ];
+  }
+
+  private findPack(packId: string): LevelPack | undefined {
+    return this.getAllPacks().find((p) => p.id === packId);
   }
 
   private generateRoomCode(): string {

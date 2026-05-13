@@ -30,6 +30,7 @@ interface GameSceneData {
   packId?: string;
   levelId?: number;
   mapWidth?: number;
+  level?: LevelData;
   isSpectator?: boolean;
   /** Pre-resolved room code from LobbyScene — used for the HUD */
   roomCode?: string;
@@ -119,6 +120,8 @@ export class GameScene extends Phaser.Scene {
   private initialPackId: string | null = null;
   private initialLevelId: number | null = null;
   private initialMapWidth: number | null = null;
+  private initialLevelData: LevelData | null = null;
+  private runtimeLevels = new Map<number, LevelData>();
 
   // ── Spectator mode ─────────────────────────────────────────────────────────
   private isSpectator = false;
@@ -137,6 +140,8 @@ export class GameScene extends Phaser.Scene {
     this.initialPackId = data.packId ?? null;
     this.initialLevelId = data.levelId ?? null;
     this.initialMapWidth = data.mapWidth ?? null;
+    this.initialLevelData = data.level ?? null;
+    this.runtimeLevels.clear();
     this.isSpectator = data.isSpectator === true;
     this.initialRoomCode = data.roomCode ?? null;
   }
@@ -146,9 +151,10 @@ export class GameScene extends Phaser.Scene {
     // gameStart). Falls back to the selected pack's first level, then to
     // Basics L1. This prevents the client from rendering the wrong level
     // when the host selected Duo/Hazards/Squad/Extreme.
+    if (this.initialLevelData) this.runtimeLevels.set(this.initialLevelData.id, this.initialLevelData);
     const allLevels: LevelData[] = ALL_PACKS.flatMap((p) => p.levels);
     const byId = this.initialLevelId !== null
-      ? allLevels.find((l) => l.id === this.initialLevelId)
+      ? this.runtimeLevels.get(this.initialLevelId) ?? allLevels.find((l) => l.id === this.initialLevelId)
       : undefined;
     const byPack = this.initialPackId
       ? ALL_PACKS.find((p) => p.id === this.initialPackId)?.levels[0]
@@ -459,7 +465,8 @@ export class GameScene extends Phaser.Scene {
     });
 
     // ── Level transition ───────────────────────────────────────────────────
-    this.onRoomMessage<{ levelId: number; mapWidth?: number; restart?: boolean }>(room, 'levelStart', (data) => {
+    this.onRoomMessage<{ levelId: number; mapWidth?: number; restart?: boolean; level?: LevelData }>(room, 'levelStart', (data) => {
+      if (data.level) this.runtimeLevels.set(data.level.id, data.level);
       this.rebuildLevel(data.levelId, data.mapWidth, data.restart === true);
     });
 
@@ -613,7 +620,9 @@ export class GameScene extends Phaser.Scene {
 
   private rebuildLevel(levelId: number, mapWidth?: number, isDeathRestart: boolean = false): void {
     const allLevels: LevelData[] = ALL_PACKS.flatMap((p) => p.levels);
-    const levelData = allLevels.find((l) => l.id === levelId) ?? ALL_PACKS[0]!.levels[0]!;
+    const levelData = this.runtimeLevels.get(levelId)
+      ?? allLevels.find((l) => l.id === levelId)
+      ?? ALL_PACKS[0]!.levels[0]!;
     const mw = mapWidth ?? levelData.mapWidth ?? GAME_WIDTH;
 
     this.physics.world.setBounds(0, 0, mw, GAME_HEIGHT);

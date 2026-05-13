@@ -6,7 +6,7 @@ import { GameRoom } from './rooms/GameRoom';
 import { leaderboardInstance } from './leaderboard/Leaderboard';
 import { accountStoreInstance } from './auth/AccountStore';
 import { customLevelStoreInstance } from './admin/CustomLevelStore';
-import { ALL_PACKS, SERVER_PORT, validateAllPacks, type LevelData } from '@pikopark/shared';
+import { ALL_PACKS, SERVER_PORT, validateAllPacks, type LevelData, type LevelPack } from '@pikopark/shared';
 
 const app = express();
 app.use(express.json());
@@ -42,6 +42,15 @@ app.use('/admin', (_req, res, next) => {
 });
 app.options('/admin/levels', (_req, res) => { res.sendStatus(204); });
 app.options('/admin/levels/*', (_req, res) => { res.sendStatus(204); });
+app.options('/admin/packs', (_req, res) => { res.sendStatus(204); });
+app.options('/admin/packs/*', (_req, res) => { res.sendStatus(204); });
+
+app.use('/packs', (_req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET,OPTIONS');
+  next();
+});
+app.options('/packs/custom', (_req, res) => { res.sendStatus(204); });
 
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', version: '1.0.19', built: new Date().toISOString() });
@@ -157,6 +166,56 @@ app.delete('/admin/levels/:slug', (req, res) => {
       console.error('[admin/levels:delete]', err);
       res.status(500).json({ error: 'Internal server error' });
     });
+});
+
+app.get('/admin/packs', (req, res) => {
+  requireAdmin(req)
+    .then((auth) => {
+      if (!auth.ok) { res.status(auth.code).json({ error: auth.error }); return; }
+      res.json({ packs: customLevels.listPacksByAuthor(auth.username) });
+    })
+    .catch((err: unknown) => {
+      console.error('[admin/packs:get]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+app.post('/admin/packs', (req, res) => {
+  requireAdmin(req)
+    .then(async (auth) => {
+      if (!auth.ok) { res.status(auth.code).json({ error: auth.error }); return; }
+      const body = (req.body ?? {}) as { pack?: unknown };
+      if (typeof body.pack !== 'object' || body.pack === null) {
+        res.status(400).json({ error: 'Missing "pack" payload' });
+        return;
+      }
+      const result = await customLevels.savePack(auth.username, body.pack as LevelPack);
+      if (result.ok) res.json({ pack: result.pack });
+      else res.status(result.code).json({ error: result.error });
+    })
+    .catch((err: unknown) => {
+      console.error('[admin/packs:post]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+app.delete('/admin/packs/:slug', (req, res) => {
+  requireAdmin(req)
+    .then(async (auth) => {
+      if (!auth.ok) { res.status(auth.code).json({ error: auth.error }); return; }
+      const slug = String(req.params['slug'] ?? '');
+      const deleted = await customLevels.deletePack(auth.username, slug);
+      if (deleted) res.json({ ok: true });
+      else res.status(404).json({ error: 'Pack not found' });
+    })
+    .catch((err: unknown) => {
+      console.error('[admin/packs:delete]', err);
+      res.status(500).json({ error: 'Internal server error' });
+    });
+});
+
+app.get('/packs/custom', (_req, res) => {
+  res.json({ packs: customLevels.listAllPacks() });
 });
 
 const httpServer = createServer(app);

@@ -1,7 +1,8 @@
 import Phaser from 'phaser';
 import { Room } from 'colyseus.js';
 import { ColyseusClient } from '../network/ColyseusClient';
-import { PLAYER_COLORS, ALL_PACKS } from '@pikopark/shared';
+import { HTTP_URL } from '../network/endpoints';
+import { PLAYER_COLORS, ALL_PACKS, type LevelPack } from '@pikopark/shared';
 import { FONT } from '../ui/theme';
 
 interface LobbyData {
@@ -53,6 +54,7 @@ export class LobbyScene extends Phaser.Scene {
   private packHeaderText!: Phaser.GameObjects.Text;
   private packScrollBar?: Phaser.GameObjects.Rectangle;
   private selectedPackId = 'solo_cadet';
+  private customPacks: LevelPack[] = [];
 
   // ── Pack grid layout + scroll state ───────────────────────────────────────
   private readonly PACK_COLS = 3;
@@ -108,6 +110,7 @@ export class LobbyScene extends Phaser.Scene {
     this.typedMessage = '';
     this.selectedCategory = 1;
     this.selectedPackId = 'solo_cadet';
+    this.customPacks = [];
     this.packScrollY = 0;
     this.packContentHeight = 0;
     this.isHost = false;
@@ -289,7 +292,7 @@ export class LobbyScene extends Phaser.Scene {
       this.rebuildPlayerList();
     });
 
-    this.room.onMessage('gameStart', (data: { packId?: string; levelId?: number; mapWidth?: number } = {}) => {
+    this.room.onMessage('gameStart', (data: { packId?: string; levelId?: number; mapWidth?: number; level?: unknown } = {}) => {
       // roomCode arrives via message (not schema), so we pass the cached
       // value straight into GameScene — UIScene can show it immediately.
       this.scene.start('GameScene', {
@@ -299,6 +302,7 @@ export class LobbyScene extends Phaser.Scene {
         packId: data.packId ?? this.selectedPackId,
         levelId: data.levelId,
         mapWidth: data.mapWidth,
+        level: data.level,
         roomCode: this.network.getRoomCode() || undefined,
       });
     });
@@ -319,6 +323,7 @@ export class LobbyScene extends Phaser.Scene {
     // Initial render of category + pack buttons
     this.rebuildCategoryButtons();
     this.rebuildPackList();
+    void this.loadCustomPacks();
   }
 
   // ── Category buttons (left panel) ─────────────────────────────────────────
@@ -366,7 +371,7 @@ export class LobbyScene extends Phaser.Scene {
     const catLabel = CATEGORIES.find((c) => c.minPlayers === this.selectedCategory)?.label ?? '';
     this.packHeaderText.setText(`PACKS — ${catLabel}`);
 
-    const visiblePacks = ALL_PACKS.filter((p) => p.minPlayers === this.selectedCategory);
+    const visiblePacks = this.getAvailablePacks().filter((p) => p.minPlayers === this.selectedCategory);
 
     if (visiblePacks.length === 0) {
       const empty = this.add.text(this.PACK_MASK_W / 2, 40, '(no packs for this category)', {
@@ -428,6 +433,22 @@ export class LobbyScene extends Phaser.Scene {
     const rows = Math.ceil(visiblePacks.length / this.PACK_COLS);
     this.packContentHeight = rows * this.PACK_CARD_H + Math.max(0, rows - 1) * this.PACK_GAP;
     this.updatePackScrollBar();
+  }
+
+  private getAvailablePacks(): LevelPack[] {
+    return [...ALL_PACKS, ...this.customPacks];
+  }
+
+  private async loadCustomPacks(): Promise<void> {
+    try {
+      const res = await fetch(`${HTTP_URL}/packs/custom`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = await res.json() as { packs?: Array<{ data: LevelPack }> };
+      this.customPacks = (body.packs ?? []).map((p) => p.data);
+      if (this.scene.isActive('LobbyScene')) this.rebuildPackList();
+    } catch (err) {
+      console.warn('[LobbyScene] custom packs unavailable:', err);
+    }
   }
 
   // ── Player list ───────────────────────────────────────────────────────────
