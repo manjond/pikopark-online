@@ -22,6 +22,7 @@ const STATUS_H = 28;
 const VIEW_W = GAME_WIDTH - LEFT_W - RIGHT_W;
 const VIEW_H = GAME_HEIGHT - TOP_H - STATUS_H;
 const GRID = TILE_SIZE;
+const SNAP = TILE_SIZE / 4;
 const FLOOR_TOP = GAME_HEIGHT - TILE_SIZE;
 const PLAYER_ON_FLOOR = FLOOR_TOP - TILE_SIZE / 2;
 const MIN_MAP_W = GAME_WIDTH;
@@ -325,24 +326,24 @@ export class EditorScene extends Phaser.Scene {
         r.tileType = nextTile(r.tileType);
         this.afterEdit();
       });
-      row('x', String(r.x), () => { r.x = Math.max(0, r.x - GRID); }, () => { r.x = Math.min(this.mapWidth() - r.width, r.x + GRID); });
-      row('y', String(r.y), () => { r.y = Math.max(0, r.y - GRID); }, () => { r.y = Math.min(FLOOR_TOP, r.y + GRID); });
+      row('x', String(r.x), () => { r.x = Math.max(0, r.x - SNAP); }, () => { r.x = Math.min(this.mapWidth() - r.width, r.x + SNAP); });
+      row('y', String(r.y), () => { r.y = Math.max(0, r.y - SNAP); }, () => { r.y = Math.min(FLOOR_TOP, r.y + SNAP); });
       row('w', String(r.width), () => { r.width = Math.max(GRID, r.width - GRID); }, () => { r.width = Math.min(this.mapWidth() - r.x, r.width + GRID); });
       row('h', String(r.height), () => { r.height = Math.max(GRID, r.height - GRID); }, () => { r.height = Math.min(GAME_HEIGHT - r.y, r.height + GRID); });
       button('DELETE', '#ff7777', () => this.deleteSelection());
     } else if (this.selection.kind === 'spawn') {
       const s = this.level.spawnPoints[this.selection.index]!;
       label(`SPAWN ${this.selection.index + 1}`, '#ffffff', '12px');
-      row('x', String(s.x), () => { s.x = clamp(s.x - GRID, TILE_SIZE / 2, this.mapWidth() - TILE_SIZE / 2); }, () => { s.x = clamp(s.x + GRID, TILE_SIZE / 2, this.mapWidth() - TILE_SIZE / 2); });
-      row('y', String(s.y), () => { s.y = clamp(s.y - GRID, TILE_SIZE / 2, GAME_HEIGHT - TILE_SIZE / 2); }, () => { s.y = clamp(s.y + GRID, TILE_SIZE / 2, GAME_HEIGHT - TILE_SIZE / 2); });
+      row('x', String(s.x), () => { s.x = clamp(s.x - SNAP, TILE_SIZE / 2, this.mapWidth() - TILE_SIZE / 2); }, () => { s.x = clamp(s.x + SNAP, TILE_SIZE / 2, this.mapWidth() - TILE_SIZE / 2); });
+      row('y', String(s.y), () => { s.y = clamp(s.y - SNAP, TILE_SIZE / 2, GAME_HEIGHT - TILE_SIZE / 2); }, () => { s.y = clamp(s.y + SNAP, TILE_SIZE / 2, GAME_HEIGHT - TILE_SIZE / 2); });
       if (this.level.spawnPoints.length > this.pack.minPlayers) button('DELETE', '#ff7777', () => this.deleteSelection());
     } else {
       const o = this.level.objects[this.selection.index]!;
       label(o.type.toUpperCase(), '#ffffff', '12px');
-      row('x', String(Math.round(o.x)), () => { o.x = clamp(o.x - GRID, o.width / 2, this.mapWidth() - o.width / 2); }, () => { o.x = clamp(o.x + GRID, o.width / 2, this.mapWidth() - o.width / 2); });
-      row('y', String(Math.round(o.y)), () => { o.y = clamp(o.y - GRID, o.height / 2, GAME_HEIGHT - o.height / 2); }, () => { o.y = clamp(o.y + GRID, o.height / 2, GAME_HEIGHT - o.height / 2); });
-      row('w', String(Math.round(o.width)), () => { o.width = Math.max(8, o.width - GRID); }, () => { o.width += GRID; });
-      row('h', String(Math.round(o.height)), () => { o.height = Math.max(8, o.height - GRID); }, () => { o.height += GRID; });
+      row('x', String(Math.round(o.x)), () => { o.x = clamp(o.x - SNAP, o.width / 2, this.mapWidth() - o.width / 2); }, () => { o.x = clamp(o.x + SNAP, o.width / 2, this.mapWidth() - o.width / 2); });
+      row('y', String(Math.round(o.y)), () => { o.y = clamp(o.y - SNAP, o.height / 2, GAME_HEIGHT - o.height / 2); }, () => { o.y = clamp(o.y + SNAP, o.height / 2, GAME_HEIGHT - o.height / 2); });
+      row('w', String(Math.round(o.width)), () => { o.width = Math.max(8, o.width - SNAP); }, () => { o.width += SNAP; });
+      row('h', String(Math.round(o.height)), () => { o.height = Math.max(8, o.height - SNAP); }, () => { o.height += SNAP; });
       if (o.type === 'button') {
         button(`MODE: ${o.latching ? 'LATCH' : 'HOLD'}`, '#88ccff', () => {
           this.pushUndo();
@@ -362,7 +363,7 @@ export class EditorScene extends Phaser.Scene {
           syncMotionToObject(o);
           this.afterEdit();
         });
-        row('range', String(Math.abs(o.motion.to - o.motion.from)), () => changeMotionRange(o, -GRID), () => changeMotionRange(o, GRID));
+        row('range', String(Math.abs(o.motion.to - o.motion.from)), () => changeMotionRange(o, -SNAP), () => changeMotionRange(o, SNAP));
         row('speed', String(o.motion.speed), () => { o.motion!.speed = Math.max(20, o.motion!.speed - 20); }, () => { o.motion!.speed += 20; });
       }
       if (o.type === 'firebar') {
@@ -841,7 +842,7 @@ export class EditorScene extends Phaser.Scene {
       this.rebuildLevelTabs();
       this.rebuildInspector();
       this.repaint();
-      this.setStatus('Pack ready. Drag pieces from the left, then save when every level is clean.', '#00ff88');
+      this.setStatus('Pack ready. Drag pieces from the left. Movement snaps every 8px for fine placement.', '#00ff88');
     });
     add(start);
   }
@@ -1307,8 +1308,8 @@ function pointInRect(x: number, y: number, r: { x: number; y: number; width: num
   return x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height;
 }
 
-function snapX(x: number): number { return Math.round(x / GRID) * GRID; }
-function snapY(y: number): number { return Math.round(y / GRID) * GRID; }
+function snapX(x: number): number { return Math.round(x / SNAP) * SNAP; }
+function snapY(y: number): number { return Math.round(y / SNAP) * SNAP; }
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
